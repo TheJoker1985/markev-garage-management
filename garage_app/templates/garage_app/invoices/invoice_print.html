@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facture {{ invoice.invoice_number }} - MarKev</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { font-size: 12px; }
+            .page-break { page-break-before: always; }
+        }
+        
+        .invoice-header {
+            border-bottom: 3px solid #2C3E50;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .logo-section {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .logo-section img {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .company-info {
+            text-align: center;
+            color: #2C3E50;
+        }
+        
+        .company-name {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .invoice-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2C3E50;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .invoice-details {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .client-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .table th {
+            background-color: #2C3E50;
+            color: white;
+            border: none;
+        }
+        
+        .table td {
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .total-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid #2C3E50;
+        }
+        
+        .footer-info {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #2C3E50;
+            text-align: center;
+            color: #6c757d;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- En-tête avec logo -->
+        <div class="invoice-header">
+            <div class="logo-section">
+                {% load static %}
+                <img src="{% static 'garage_app/images/markev_logo.svg' %}" alt="MarKev Logo">
+            </div>
+            <div class="company-info">
+                <div class="company-name">CHEZ MARKEV</div>
+                {% if company_profile %}
+                    <div>{{ company_profile.address }}</div>
+                    <div>{{ company_profile.city }}, {{ company_profile.province }} {{ company_profile.postal_code }}</div>
+                    <div>Tél: {{ company_profile.phone }} | Email: {{ company_profile.email }}</div>
+                    {% if company_profile.tax_number %}
+                        <div>No. TPS/TVH: {{ company_profile.tax_number }}</div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Titre de la facture -->
+        <div class="invoice-title">FACTURE</div>
+
+        <!-- Informations de la facture et du client -->
+        <div class="row">
+            <div class="col-6">
+                <div class="invoice-details">
+                    <h6><strong>Détails de la facture</strong></h6>
+                    <p><strong>Numéro:</strong> {{ invoice.invoice_number }}</p>
+                    <p><strong>Date:</strong> {{ invoice.invoice_date|date:"d/m/Y" }}</p>
+                    <p><strong>Échéance:</strong> {{ invoice.due_date|date:"d/m/Y" }}</p>
+                    <p><strong>Statut:</strong> 
+                        {% if invoice.status == 'paid' %}
+                            <span class="badge bg-success">Payée</span>
+                        {% elif invoice.status == 'sent' %}
+                            <span class="badge bg-warning">Envoyée</span>
+                        {% elif invoice.status == 'draft' %}
+                            <span class="badge bg-secondary">Brouillon</span>
+                        {% elif invoice.status == 'overdue' %}
+                            <span class="badge bg-danger">En retard</span>
+                        {% elif invoice.status == 'cancelled' %}
+                            <span class="badge bg-dark">Annulée</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="client-info">
+                    <h6><strong>Facturé à:</strong></h6>
+                    <p><strong>{{ invoice.client.full_name }}</strong></p>
+                    <p>{{ invoice.client.phone }}</p>
+                    {% if invoice.client.email %}
+                        <p>{{ invoice.client.email }}</p>
+                    {% endif %}
+                    {% if invoice.client.address %}
+                        <p>{{ invoice.client.address }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Véhicule si applicable -->
+        {% if invoice.vehicle %}
+        <div class="row">
+            <div class="col-12">
+                <div class="client-info">
+                    <h6><strong>Véhicule:</strong></h6>
+                    <p>{{ invoice.vehicle }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Éléments de facture -->
+        <div class="row">
+            <div class="col-12">
+                <h6><strong>Services et produits</strong></h6>
+                {% if invoice_items %}
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Description</th>
+                                <th style="width: 10%;">Qté</th>
+                                <th style="width: 15%;">Prix unit.</th>
+                                <th style="width: 15%;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice_items %}
+                            <tr>
+                                <td>{{ item.service.name }}</td>
+                                <td>{{ item.description|default:"-" }}</td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-end">${{ item.unit_price|floatformat:2 }}</td>
+                                <td class="text-end">${{ item.total_price|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">Aucun élément dans cette facture</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Total -->
+        <div class="row">
+            <div class="col-8"></div>
+            <div class="col-4">
+                <div class="total-section">
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <td>Sous-total:</td>
+                            <td class="text-end">${{ invoice.subtotal|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td>TPS (5%):</td>
+                            <td class="text-end">${{ invoice.gst_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <td>TVQ (9.975%):</td>
+                            <td class="text-end">${{ invoice.qst_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr style="border-top: 2px solid #2C3E50;">
+                            <td><strong>TOTAL:</strong></td>
+                            <td class="text-end"><strong>${{ invoice.total_amount|floatformat:2 }}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        {% if invoice.notes %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <h6><strong>Notes:</strong></h6>
+                <p>{{ invoice.notes|linebreaks }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Pied de page -->
+        <div class="footer-info">
+            <p><strong>Merci de votre confiance!</strong></p>
+            <p>Cette facture a été générée électroniquement le {{ "now"|date:"d/m/Y à H:i" }}</p>
+        </div>
+
+        <!-- Boutons d'action (cachés à l'impression) -->
+        <div class="no-print text-center mt-4">
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-print me-2"></i>Imprimer
+            </button>
+            <a href="{% url 'garage_app:invoice_detail' invoice.id %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Retour
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+</body>
+</html>

@@ -33,6 +33,7 @@ urlpatterns = [
     # Gestion des factures
     path('invoices/', views.invoice_list, name='invoice_list'),
     path('invoices/<int:invoice_id>/', views.invoice_detail, name='invoice_detail'),
+    path('invoices/<int:invoice_id>/print/', views.invoice_print, name='invoice_print'),
     path('invoices/new/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:invoice_id>/edit/', views.invoice_update, name='invoice_update'),
     path('invoices/<int:invoice_id>/mark-paid/', views.invoice_mark_paid, name='invoice_mark_paid'),

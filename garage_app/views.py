@@ -459,6 +459,27 @@ def invoice_detail(request, invoice_id):
 
 
 @login_required
+def invoice_print(request, invoice_id):
+    """Vue pour l'impression d'une facture avec logo"""
+    invoice = get_object_or_404(Invoice, id=invoice_id)
+    invoice_items = invoice.invoice_items.all()
+
+    # Récupérer le profil de l'entreprise pour l'en-tête
+    try:
+        company_profile = CompanyProfile.objects.first()
+    except CompanyProfile.DoesNotExist:
+        company_profile = None
+
+    context = {
+        'invoice': invoice,
+        'invoice_items': invoice_items,
+        'company_profile': company_profile
+    }
+
+    return render(request, 'garage_app/invoices/invoice_print.html', context)
+
+
+@login_required
 def invoice_create(request):
     """Vue pour créer une nouvelle facture"""
     if request.method == 'POST':

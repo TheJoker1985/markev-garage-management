@@ -210,6 +210,26 @@
                 margin-left: 250px;
             }
         }
+
+        /* Styles pour le logo */
+        .logo-container {
+            text-align: center;
+            padding: 20px 10px;
+            border-bottom: 1px solid #495057;
+            margin-bottom: 20px;
+        }
+        .logo-container img {
+            max-width: 120px;
+            height: auto;
+            filter: brightness(1.1);
+        }
+        .logo-text {
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
@@ -217,7 +237,12 @@
     <!-- Sidebar -->
     <nav class="sidebar position-fixed d-none d-lg-block">
         <div class="p-3">
-            <h4 class="text-white">MarKev</h4>
+            <!-- Logo Section -->
+            <div class="logo-container">
+                {% load static %}
+                <img src="{% static 'garage_app/images/markev_logo.svg' %}" alt="MarKev Logo" class="img-fluid">
+                <div class="logo-text">CHEZ MARKEV</div>
+            </div>
             <ul class="nav flex-column">
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'garage_app:dashboard' %}">
