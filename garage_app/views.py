@@ -925,6 +925,9 @@ def financial_reports(request):
     cash_in_hand = cash_total  # Argent comptant à déposer manuellement
     total_tracked_payments = sum(data['total'] for data in payment_methods_data.values())
 
+    # Différence entre revenus totaux et paiements trackés
+    payment_tracking_difference = total_revenue - total_tracked_payments
+
     # Répartition par catégorie
     expense_by_category = period_expenses.values('category').annotate(
         total=Sum('amount')
@@ -960,6 +963,7 @@ def financial_reports(request):
         'bank_deposits': bank_deposits,
         'cash_in_hand': cash_in_hand,
         'total_tracked_payments': total_tracked_payments,
+        'payment_tracking_difference': payment_tracking_difference,
     }
 
     return render(request, 'garage_app/reports/financial_reports.html', context)

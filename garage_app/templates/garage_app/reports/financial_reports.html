@@ -184,10 +184,10 @@
                     {% endfor %}
                 </div>
 
-                {% if total_tracked_payments != total_revenue %}
+                {% if payment_tracking_difference != 0 %}
                 <div class="alert alert-warning mt-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Attention:</strong> Il y a une différence de ${{ total_revenue|sub:total_tracked_payments|floatformat:2 }}
+                    <strong>Attention:</strong> Il y a une différence de ${{ payment_tracking_difference|floatformat:2 }}
                     entre le total des revenus et les paiements avec mode spécifié.
                     Certaines factures n'ont pas de mode de paiement renseigné.
                 </div>
