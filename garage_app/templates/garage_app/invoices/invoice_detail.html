@@ -20,11 +20,8 @@
                     <i class="fas fa-file-pdf me-2"></i>Générer PDF
                 </a>
                 <a href="{% url 'garage_app:invoice_print' invoice.id %}" class="btn btn-outline-info" target="_blank">
-                    <i class="fas fa-print me-2"></i>Imprimer avec logo
+                    <i class="fas fa-print me-2"></i>Imprimer
                 </a>
-                <button class="btn btn-outline-secondary" onclick="window.print()">
-                    <i class="fas fa-print me-2"></i>Imprimer simple
-                </button>
                 <a href="{% url 'garage_app:invoice_list' %}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left me-2"></i>Retour à la liste
                 </a>
