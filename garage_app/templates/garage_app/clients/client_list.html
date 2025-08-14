@@ -1,0 +1,141 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Clients - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Gestion des clients</h1>
+            <a href="{% url 'garage_app:client_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Nouveau client
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Barre de recherche et filtres -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <form method="get" class="d-flex">
+            <input type="text" name="search" class="form-control me-2" 
+                   placeholder="Rechercher par nom, téléphone ou email..." 
+                   value="{{ search_query }}">
+            <button type="submit" class="btn btn-outline-primary">
+                <i class="fas fa-search"></i>
+            </button>
+            {% if search_query %}
+                <a href="{% url 'garage_app:client_list' %}" class="btn btn-outline-secondary ms-2">
+                    <i class="fas fa-times"></i>
+                </a>
+            {% endif %}
+        </form>
+    </div>
+    <div class="col-md-4 text-end">
+        <span class="text-muted">{{ total_clients }} client(s) trouvé(s)</span>
+    </div>
+</div>
+
+<!-- Liste des clients -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Téléphone</th>
+                                    <th>Email</th>
+                                    <th>Véhicules</th>
+                                    <th>Créé le</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for client in page_obj %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'garage_app:client_detail' client.id %}" class="text-decoration-none">
+                                            <strong>{{ client.full_name }}</strong>
+                                        </a>
+                                    </td>
+                                    <td>{{ client.phone }}</td>
+                                    <td>{{ client.email|default:"-" }}</td>
+                                    <td>
+                                        <span class="badge bg-info">{{ client.vehicles.count }}</span>
+                                    </td>
+                                    <td>{{ client.created_at|date:"d/m/Y" }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'garage_app:client_detail' client.id %}" 
+                                               class="btn btn-outline-primary" title="Voir">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'garage_app:client_update' client.id %}" 
+                                               class="btn btn-outline-warning" title="Modifier">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{% url 'garage_app:client_delete' client.id %}" 
+                                               class="btn btn-outline-danger" title="Supprimer">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <nav aria-label="Navigation des pages">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}">Premier</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Précédent</a>
+                                    </li>
+                                {% endif %}
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}</span>
+                                </li>
+                                
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">Suivant</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}">Dernier</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <h5>Aucun client trouvé</h5>
+                        <p class="text-muted">
+                            {% if search_query %}
+                                Aucun client ne correspond à votre recherche.
+                            {% else %}
+                                Commencez par ajouter votre premier client.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'garage_app:client_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Nouveau client
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ client.full_name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ client.full_name }}</h1>
+            <div>
+                <a href="{% url 'garage_app:client_update' client.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Modifier
+                </a>
+                <a href="{% url 'garage_app:client_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informations du client -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations du client</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Nom complet:</strong> {{ client.full_name }}</p>
+                <p><strong>Téléphone:</strong> {{ client.phone }}</p>
+                <p><strong>Email:</strong> {{ client.email|default:"Non renseigné" }}</p>
+                {% if client.address %}
+                    <p><strong>Adresse:</strong><br>{{ client.address|linebreaks }}</p>
+                {% endif %}
+                {% if client.notes %}
+                    <p><strong>Notes:</strong><br>{{ client.notes|linebreaks }}</p>
+                {% endif %}
+                <p><strong>Client depuis:</strong> {{ client.created_at|date:"d/m/Y" }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Véhicules -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Véhicules ({{ vehicles.count }})</h5>
+                <a href="{% url 'garage_app:vehicle_create_for_client' client.id %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i>Ajouter véhicule
+                </a>
+            </div>
+            <div class="card-body">
+                {% if vehicles %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Véhicule</th>
+                                    <th>Couleur</th>
+                                    <th>Plaque</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehicle in vehicles %}
+                                <tr>
+                                    <td>{{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }}</td>
+                                    <td>{{ vehicle.color|default:"-" }}</td>
+                                    <td>{{ vehicle.license_plate|default:"-" }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'garage_app:vehicle_update' vehicle.id %}" 
+                                               class="btn btn-outline-warning" title="Modifier">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{% url 'garage_app:vehicle_delete' vehicle.id %}" 
+                                               class="btn btn-outline-danger" title="Supprimer">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-car fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">Aucun véhicule enregistré</p>
+                        <a href="{% url 'garage_app:vehicle_create_for_client' client.id %}" class="btn btn-sm btn-primary">
+                            Ajouter le premier véhicule
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Factures récentes -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Factures récentes</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_invoices %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Numéro</th>
+                                    <th>Date</th>
+                                    <th>Montant</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in recent_invoices %}
+                                <tr>
+                                    <td>{{ invoice.invoice_number }}</td>
+                                    <td>{{ invoice.invoice_date|date:"d/m/Y" }}</td>
+                                    <td>${{ invoice.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        {% if invoice.status == 'paid' %}
+                                            <span class="badge bg-success">Payée</span>
+                                        {% elif invoice.status == 'sent' %}
+                                            <span class="badge bg-warning">Envoyée</span>
+                                        {% elif invoice.status == 'draft' %}
+                                            <span class="badge bg-secondary">Brouillon</span>
+                                        {% elif invoice.status == 'overdue' %}
+                                            <span class="badge bg-danger">En retard</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-file-invoice fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">Aucune facture pour ce client</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

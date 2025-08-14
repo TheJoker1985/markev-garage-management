@@ -1,0 +1,180 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Tableau de bord - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">Tableau de bord</h1>
+    </div>
+</div>
+
+<!-- Statistiques financières -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Revenus {{ current_month }}</h6>
+                        <h4>${{ monthly_revenue|floatformat:2 }}</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-dollar-sign fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Revenus {{ current_year }}</h6>
+                        <h4>${{ yearly_revenue|floatformat:2 }}</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Dépenses {{ current_month }}</h6>
+                        <h4>${{ monthly_expenses|floatformat:2 }}</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-credit-card fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card {% if monthly_profit >= 0 %}bg-info{% else %}bg-danger{% endif %} text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="card-title">Profit {{ current_month }}</h6>
+                        <h4>${{ monthly_profit|floatformat:2 }}</h4>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-pie fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiques générales -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                <h5>{{ total_clients }}</h5>
+                <p class="text-muted">Clients</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-tools fa-3x text-success mb-3"></i>
+                <h5>{{ total_services }}</h5>
+                <p class="text-muted">Services actifs</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-file-invoice fa-3x text-warning mb-3"></i>
+                <h5>{{ pending_invoices }}</h5>
+                <p class="text-muted">Factures en attente</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5>{{ overdue_invoices }}</h5>
+                <p class="text-muted">Factures en retard</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions rapides -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Actions rapides</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'garage_app:client_create' %}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-user-plus me-2"></i>Nouveau client
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'garage_app:service_create' %}" class="btn btn-info btn-lg w-100">
+                            <i class="fas fa-tools me-2"></i>Nouveau service
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'garage_app:invoice_create' %}" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-file-invoice me-2"></i>Nouvelle facture
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'garage_app:expense_create' %}" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-receipt me-2"></i>Nouvelle dépense
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Liens vers les listes -->
+                <div class="row mt-3">
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'garage_app:client_list' %}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-users me-2"></i>Voir tous les clients
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'garage_app:service_list' %}" class="btn btn-outline-info w-100">
+                            <i class="fas fa-list me-2"></i>Voir tous les services
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'garage_app:invoice_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-file-invoice me-2"></i>Voir toutes les factures
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'garage_app:expense_list' %}" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-receipt me-2"></i>Voir toutes les dépenses
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

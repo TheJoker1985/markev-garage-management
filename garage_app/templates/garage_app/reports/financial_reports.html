@@ -1,0 +1,218 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Rapports financiers - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Rapports financiers</h1>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                    {{ period_name }}
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="?period=current_month">Mois en cours</a></li>
+                    <li><a class="dropdown-item" href="?period=last_month">Mois dernier</a></li>
+                    <li><a class="dropdown-item" href="?period=current_year">Année en cours</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Résumé financier -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h4>${{ total_revenue|floatformat:2 }}</h4>
+                <p class="mb-0">Revenus totaux</p>
+                <small>{{ paid_invoices_count }} facture(s) payée(s)</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h4>${{ total_expenses|floatformat:2 }}</h4>
+                <p class="mb-0">Dépenses totales</p>
+                <small>{{ expenses_count }} dépense(s)</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card {% if net_profit >= 0 %}bg-info{% else %}bg-danger{% endif %} text-white">
+            <div class="card-body text-center">
+                <h4>${{ net_profit|floatformat:2 }}</h4>
+                <p class="mb-0">Profit net</p>
+                <small>{% if net_profit >= 0 %}Bénéfice{% else %}Perte{% endif %}</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-secondary text-white">
+            <div class="card-body text-center">
+                <h4>{{ paid_invoices_count|add:expenses_count }}</h4>
+                <p class="mb-0">Transactions</p>
+                <small>Total des opérations</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Détails des taxes -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">TPS (5%)</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p><strong>Perçue:</strong> ${{ total_gst_collected|floatformat:2 }}</p>
+                        <p><strong>Payée:</strong> ${{ total_gst_paid|floatformat:2 }}</p>
+                    </div>
+                    <div class="col-6">
+                        <p><strong>Net à remettre:</strong></p>
+                        <h5 class="{% if net_gst >= 0 %}text-danger{% else %}text-success{% endif %}">
+                            ${{ net_gst|floatformat:2 }}
+                        </h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">TVQ (9.975%)</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p><strong>Perçue:</strong> ${{ total_qst_collected|floatformat:2 }}</p>
+                        <p><strong>Payée:</strong> ${{ total_qst_paid|floatformat:2 }}</p>
+                    </div>
+                    <div class="col-6">
+                        <p><strong>Net à remettre:</strong></p>
+                        <h5 class="{% if net_qst >= 0 %}text-danger{% else %}text-success{% endif %}">
+                            ${{ net_qst|floatformat:2 }}
+                        </h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Répartition des dépenses -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Dépenses par catégorie</h5>
+            </div>
+            <div class="card-body">
+                {% if expense_by_category %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Catégorie</th>
+                                    <th class="text-end">Montant</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in expense_by_category %}
+                                <tr>
+                                    <td>{{ item.category|capfirst }}</td>
+                                    <td class="text-end">${{ item.total|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        {% widthratio item.total total_expenses 100 %}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Aucune dépense pour cette période</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Revenus par service</h5>
+            </div>
+            <div class="card-body">
+                {% if revenue_by_service %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Catégorie</th>
+                                    <th class="text-end">Revenus</th>
+                                    <th class="text-end">%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in revenue_by_service %}
+                                <tr>
+                                    <td>{{ item.invoice_items__service__category|capfirst }}</td>
+                                    <td class="text-end">${{ item.total|floatformat:2 }}</td>
+                                    <td class="text-end">
+                                        {% widthratio item.total total_subtotal 100 %}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Aucun revenu pour cette période</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <button class="btn btn-primary w-100" onclick="window.print()">
+                            <i class="fas fa-print me-2"></i>Imprimer le rapport
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{% url 'garage_app:invoice_list' %}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-file-invoice me-2"></i>Voir les factures
+                        </a>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="{% url 'garage_app:expense_list' %}" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-receipt me-2"></i>Voir les dépenses
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

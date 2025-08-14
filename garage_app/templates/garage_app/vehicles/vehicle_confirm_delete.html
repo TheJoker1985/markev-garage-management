@@ -1,0 +1,45 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Supprimer {{ vehicle }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmer la suppression
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Êtes-vous sûr de vouloir supprimer le véhicule <strong>{{ vehicle }}</strong> ?</p>
+                
+                <div class="alert alert-info">
+                    <p><strong>Informations du véhicule:</strong></p>
+                    <ul class="mb-0">
+                        <li>Propriétaire: {{ vehicle.client.full_name }}</li>
+                        <li>Véhicule: {{ vehicle.year }} {{ vehicle.make }} {{ vehicle.model }}</li>
+                        {% if vehicle.color %}<li>Couleur: {{ vehicle.color }}</li>{% endif %}
+                        {% if vehicle.license_plate %}<li>Plaque: {{ vehicle.license_plate }}</li>{% endif %}
+                    </ul>
+                </div>
+                
+                <p class="text-muted">
+                    <small>Cette action est irréversible. Le véhicule sera supprimé de toutes les factures associées.</small>
+                </p>
+                
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Oui, supprimer
+                    </button>
+                </form>
+                
+                <a href="{% url 'garage_app:client_detail' vehicle.client.id %}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-2"></i>Annuler
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

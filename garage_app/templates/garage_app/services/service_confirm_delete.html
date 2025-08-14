@@ -1,0 +1,45 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Supprimer {{ service.name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmer la suppression
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Êtes-vous sûr de vouloir supprimer le service <strong>"{{ service.name }}"</strong> ?</p>
+                
+                <div class="alert alert-info">
+                    <p><strong>Informations du service:</strong></p>
+                    <ul class="mb-0">
+                        <li>Catégorie: {{ service.get_category_display }}</li>
+                        <li>Prix par défaut: ${{ service.default_price|floatformat:2 }}</li>
+                        <li>Statut: {% if service.is_active %}Actif{% else %}Inactif{% endif %}</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Attention:</strong> Cette action est irréversible. Le service sera supprimé de toutes les factures existantes.
+                </div>
+                
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Oui, supprimer
+                    </button>
+                </form>
+                
+                <a href="{% url 'garage_app:service_detail' service.id %}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-2"></i>Annuler
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

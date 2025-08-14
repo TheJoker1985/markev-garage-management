@@ -1,0 +1,113 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ expense.description }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ expense.description }}</h1>
+            <div>
+                <a href="{% url 'garage_app:expense_update' expense.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Modifier
+                </a>
+                <a href="{% url 'garage_app:expense_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informations de la dépense -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations de la dépense</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Description:</strong> {{ expense.description }}</p>
+                <p><strong>Catégorie:</strong> 
+                    <span class="badge bg-secondary">{{ expense.get_category_display }}</span>
+                </p>
+                <p><strong>Date de dépense:</strong> {{ expense.expense_date|date:"d/m/Y" }}</p>
+                <p><strong>Montant:</strong> ${{ expense.amount|floatformat:2 }}</p>
+                
+                {% if expense.gst_amount or expense.qst_amount %}
+                    <hr>
+                    <h6>Taxes payées</h6>
+                    {% if expense.gst_amount %}
+                        <p><strong>TPS (5%):</strong> ${{ expense.gst_amount|floatformat:2 }}</p>
+                    {% endif %}
+                    {% if expense.qst_amount %}
+                        <p><strong>TVQ (9.975%):</strong> ${{ expense.qst_amount|floatformat:2 }}</p>
+                    {% endif %}
+                    <p><strong>Total avec taxes:</strong> <span class="text-primary">${{ expense.total_with_taxes|floatformat:2 }}</span></p>
+                {% endif %}
+                
+                {% if expense.notes %}
+                    <hr>
+                    <h6>Notes</h6>
+                    <p>{{ expense.notes|linebreaks }}</p>
+                {% endif %}
+                
+                <hr>
+                <p><strong>Enregistrée le:</strong> {{ expense.created_at|date:"d/m/Y à H:i" }}</p>
+                <p><strong>Modifiée le:</strong> {{ expense.updated_at|date:"d/m/Y à H:i" }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reçu -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Reçu</h5>
+            </div>
+            <div class="card-body">
+                {% if expense.receipt %}
+                    <div class="text-center">
+                        <i class="fas fa-file fa-3x text-success mb-3"></i>
+                        <p><strong>Reçu disponible</strong></p>
+                        <a href="{{ expense.receipt.url }}" target="_blank" class="btn btn-primary">
+                            <i class="fas fa-download me-2"></i>Télécharger le reçu
+                        </a>
+                        <p class="text-muted mt-2">
+                            <small>Fichier: {{ expense.receipt.name|slice:"9:" }}</small>
+                        </p>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-file fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Aucun reçu téléversé</p>
+                        <a href="{% url 'garage_app:expense_update' expense.id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-upload me-2"></i>Ajouter un reçu
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Actions rapides -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">Actions</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'garage_app:expense_update' expense.id %}" class="btn btn-warning">
+                        <i class="fas fa-edit me-2"></i>Modifier cette dépense
+                    </a>
+                    <a href="{% url 'garage_app:expense_delete' expense.id %}" class="btn btn-outline-danger">
+                        <i class="fas fa-trash me-2"></i>Supprimer cette dépense
+                    </a>
+                    <a href="{% url 'garage_app:expense_create' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-plus me-2"></i>Nouvelle dépense
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

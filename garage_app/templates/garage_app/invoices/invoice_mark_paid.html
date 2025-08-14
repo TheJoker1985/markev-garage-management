@@ -1,0 +1,44 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Marquer comme payée - {{ invoice.invoice_number }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-check me-2"></i>Marquer comme payée
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Confirmer le paiement de la facture <strong>{{ invoice.invoice_number }}</strong> ?</p>
+                
+                <div class="alert alert-info">
+                    <p><strong>Détails de la facture:</strong></p>
+                    <ul class="mb-0">
+                        <li>Client: {{ invoice.client.full_name }}</li>
+                        <li>Montant total: ${{ invoice.total_amount|floatformat:2 }}</li>
+                        <li>Date d'échéance: {{ invoice.due_date|date:"d/m/Y" }}</li>
+                    </ul>
+                </div>
+                
+                <p class="text-muted">
+                    <small>Un paiement sera automatiquement créé pour le montant total de la facture avec la date d'aujourd'hui.</small>
+                </p>
+                
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-2"></i>Confirmer le paiement
+                    </button>
+                </form>
+                
+                <a href="{% url 'garage_app:invoice_detail' invoice.id %}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-2"></i>Annuler
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

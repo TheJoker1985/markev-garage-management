@@ -1,0 +1,101 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ service.name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ service.name }}</h1>
+            <div>
+                <a href="{% url 'garage_app:service_update' service.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Modifier
+                </a>
+                <a href="{% url 'garage_app:service_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informations du service -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations du service</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Nom:</strong> {{ service.name }}</p>
+                <p><strong>Catégorie:</strong> 
+                    <span class="badge bg-secondary">{{ service.get_category_display }}</span>
+                </p>
+                <p><strong>Prix par défaut:</strong> ${{ service.default_price|floatformat:2 }}</p>
+                <p><strong>Statut:</strong> 
+                    {% if service.is_active %}
+                        <span class="badge bg-success">Actif</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactif</span>
+                    {% endif %}
+                </p>
+                {% if service.description %}
+                    <p><strong>Description:</strong><br>{{ service.description|linebreaks }}</p>
+                {% endif %}
+                <p><strong>Créé le:</strong> {{ service.created_at|date:"d/m/Y à H:i" }}</p>
+                <p><strong>Modifié le:</strong> {{ service.updated_at|date:"d/m/Y à H:i" }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Utilisation récente -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Utilisation récente</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_invoices %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Facture</th>
+                                    <th>Client</th>
+                                    <th>Date</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for invoice in recent_invoices %}
+                                <tr>
+                                    <td>{{ invoice.invoice_number }}</td>
+                                    <td>{{ invoice.client.full_name }}</td>
+                                    <td>{{ invoice.invoice_date|date:"d/m/Y" }}</td>
+                                    <td>
+                                        {% if invoice.status == 'paid' %}
+                                            <span class="badge bg-success">Payée</span>
+                                        {% elif invoice.status == 'sent' %}
+                                            <span class="badge bg-warning">Envoyée</span>
+                                        {% elif invoice.status == 'draft' %}
+                                            <span class="badge bg-secondary">Brouillon</span>
+                                        {% elif invoice.status == 'overdue' %}
+                                            <span class="badge bg-danger">En retard</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-file-invoice fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">Ce service n'a pas encore été utilisé</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

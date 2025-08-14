@@ -1,0 +1,116 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ title }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ title }}</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.client.id_for_label }}" class="form-label">{{ form.client.label }} *</label>
+                        {{ form.client }}
+                        {% if form.client.errors %}
+                            <div class="text-danger">{{ form.client.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="{{ form.make.id_for_label }}" class="form-label">{{ form.make.label }} *</label>
+                            {{ form.make }}
+                            {% if form.make.errors %}
+                                <div class="text-danger">{{ form.make.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.model.id_for_label }}" class="form-label">{{ form.model.label }} *</label>
+                            {{ form.model }}
+                            {% if form.model.errors %}
+                                <div class="text-danger">{{ form.model.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label for="{{ form.year.id_for_label }}" class="form-label">{{ form.year.label }} *</label>
+                            {{ form.year }}
+                            {% if form.year.errors %}
+                                <div class="text-danger">{{ form.year.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="{{ form.color.id_for_label }}" class="form-label">{{ form.color.label }}</label>
+                            {{ form.color }}
+                            {% if form.color.errors %}
+                                <div class="text-danger">{{ form.color.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label for="{{ form.license_plate.id_for_label }}" class="form-label">{{ form.license_plate.label }}</label>
+                            {{ form.license_plate }}
+                            {% if form.license_plate.errors %}
+                                <div class="text-danger">{{ form.license_plate.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.vin.id_for_label }}" class="form-label">{{ form.vin.label }}</label>
+                        {{ form.vin }}
+                        {% if form.vin.errors %}
+                            <div class="text-danger">{{ form.vin.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">Numéro d'identification du véhicule (17 caractères)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.notes.id_for_label }}" class="form-label">{{ form.notes.label }}</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="text-danger">{{ form.notes.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{% if vehicle %}{% url 'garage_app:client_detail' vehicle.client.id %}{% elif client %}{% url 'garage_app:client_detail' client.id %}{% else %}{% url 'garage_app:client_list' %}{% endif %}" 
+                           class="btn btn-secondary">Annuler</a>
+                        <button type="submit" class="btn btn-primary">{{ submit_text }}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Aide</h6>
+            </div>
+            <div class="card-body">
+                <p><strong>Champs obligatoires:</strong></p>
+                <ul class="small">
+                    <li>Client propriétaire</li>
+                    <li>Marque, modèle et année</li>
+                </ul>
+                <p><strong>Conseils:</strong></p>
+                <ul class="small">
+                    <li>La plaque d'immatriculation aide à identifier rapidement le véhicule</li>
+                    <li>Le numéro VIN est utile pour les pièces et l'historique</li>
+                    <li>Utilisez les notes pour des informations spéciales (modifications, etc.)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

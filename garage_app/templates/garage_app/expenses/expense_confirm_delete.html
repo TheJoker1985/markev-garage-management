@@ -1,0 +1,51 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Supprimer {{ expense.description }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmer la suppression
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Êtes-vous sûr de vouloir supprimer la dépense <strong>"{{ expense.description }}"</strong> ?</p>
+                
+                <div class="alert alert-info">
+                    <p><strong>Informations de la dépense:</strong></p>
+                    <ul class="mb-0">
+                        <li>Montant: ${{ expense.amount|floatformat:2 }}</li>
+                        <li>Date: {{ expense.expense_date|date:"d/m/Y" }}</li>
+                        <li>Catégorie: {{ expense.get_category_display }}</li>
+                        {% if expense.gst_amount or expense.qst_amount %}
+                            <li>Total avec taxes: ${{ expense.total_with_taxes|floatformat:2 }}</li>
+                        {% endif %}
+                        {% if expense.receipt %}
+                            <li>Reçu: Fichier attaché</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Attention:</strong> Cette action est irréversible. La dépense et son reçu seront définitivement supprimés.
+                </div>
+                
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Oui, supprimer
+                    </button>
+                </form>
+                
+                <a href="{% url 'garage_app:expense_detail' expense.id %}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-2"></i>Annuler
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

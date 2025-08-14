@@ -1,0 +1,49 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Supprimer {{ client.full_name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmer la suppression
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Êtes-vous sûr de vouloir supprimer le client <strong>{{ client.full_name }}</strong> ?</p>
+                
+                {% if client.vehicles.count > 0 %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Attention:</strong> Ce client a {{ client.vehicles.count }} véhicule(s) enregistré(s).
+                    </div>
+                {% endif %}
+                
+                {% if client.invoices.count > 0 %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Attention:</strong> Ce client a {{ client.invoices.count }} facture(s) associée(s).
+                    </div>
+                {% endif %}
+                
+                <p class="text-muted">
+                    <small>Cette action est irréversible. Toutes les données associées (véhicules, factures) seront également supprimées.</small>
+                </p>
+                
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Oui, supprimer
+                    </button>
+                </form>
+                
+                <a href="{% url 'garage_app:client_detail' client.id %}" class="btn btn-secondary ms-2">
+                    <i class="fas fa-times me-2"></i>Annuler
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
