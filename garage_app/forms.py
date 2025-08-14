@@ -154,7 +154,7 @@ class InvoiceForm(forms.ModelForm):
 
     class Meta:
         model = Invoice
-        fields = ['client', 'vehicle', 'invoice_date', 'due_date', 'notes']
+        fields = ['client', 'vehicle', 'invoice_date', 'due_date', 'payment_method', 'notes']
         widgets = {
             'client': forms.Select(attrs={'class': 'form-select'}),
             'vehicle': forms.Select(attrs={'class': 'form-select'}),

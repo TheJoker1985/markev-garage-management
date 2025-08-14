@@ -222,6 +222,23 @@ class Invoice(models.Model):
     ]
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name="Statut")
 
+    # Mode de paiement
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Argent comptant'),
+        ('debit', 'Carte de débit'),
+        ('credit', 'Carte de crédit'),
+        ('cheque', 'Chèque'),
+        ('transfer', 'Virement bancaire'),
+        ('other', 'Autre'),
+    ]
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="Mode de paiement"
+    )
+
     # Notes
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
 

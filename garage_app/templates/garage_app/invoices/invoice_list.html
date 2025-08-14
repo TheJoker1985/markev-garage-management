@@ -63,6 +63,7 @@
                                     <th>Échéance</th>
                                     <th>Montant</th>
                                     <th>Statut</th>
+                                    <th>Paiement</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -94,6 +95,25 @@
                                             <span class="badge bg-danger">En retard</span>
                                         {% elif invoice.status == 'cancelled' %}
                                             <span class="badge bg-dark">Annulée</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if invoice.payment_method %}
+                                            {% if invoice.payment_method == 'cash' %}
+                                                <span class="badge bg-success"><i class="fas fa-money-bill-wave me-1"></i>Argent</span>
+                                            {% elif invoice.payment_method == 'debit' %}
+                                                <span class="badge bg-primary"><i class="fas fa-credit-card me-1"></i>Débit</span>
+                                            {% elif invoice.payment_method == 'credit' %}
+                                                <span class="badge bg-warning"><i class="fas fa-credit-card me-1"></i>Crédit</span>
+                                            {% elif invoice.payment_method == 'cheque' %}
+                                                <span class="badge bg-info"><i class="fas fa-money-check me-1"></i>Chèque</span>
+                                            {% elif invoice.payment_method == 'transfer' %}
+                                                <span class="badge bg-secondary"><i class="fas fa-exchange-alt me-1"></i>Virement</span>
+                                            {% elif invoice.payment_method == 'other' %}
+                                                <span class="badge bg-dark"><i class="fas fa-question me-1"></i>Autre</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
                                     <td>
