@@ -899,6 +899,32 @@ def financial_reports(request):
     net_gst = total_gst_collected - total_gst_paid
     net_qst = total_qst_collected - total_qst_paid
 
+    # Analyse des modes de paiement
+    payment_methods_data = {}
+    cash_total = paid_invoices.filter(payment_method='cash').aggregate(total=Sum('total_amount'))['total'] or 0
+    debit_total = paid_invoices.filter(payment_method='debit').aggregate(total=Sum('total_amount'))['total'] or 0
+    credit_total = paid_invoices.filter(payment_method='credit').aggregate(total=Sum('total_amount'))['total'] or 0
+    cheque_total = paid_invoices.filter(payment_method='cheque').aggregate(total=Sum('total_amount'))['total'] or 0
+    transfer_total = paid_invoices.filter(payment_method='transfer').aggregate(total=Sum('total_amount'))['total'] or 0
+    other_total = paid_invoices.filter(payment_method='other').aggregate(total=Sum('total_amount'))['total'] or 0
+    no_method_total = paid_invoices.filter(payment_method__isnull=True).aggregate(total=Sum('total_amount'))['total'] or 0
+
+    # Regroupement pour faciliter l'affichage
+    payment_methods_data = {
+        'cash': {'name': 'Argent comptant', 'total': cash_total, 'icon': 'fas fa-money-bill-wave', 'color': 'success'},
+        'debit': {'name': 'Carte de débit', 'total': debit_total, 'icon': 'fas fa-credit-card', 'color': 'primary'},
+        'credit': {'name': 'Carte de crédit', 'total': credit_total, 'icon': 'fas fa-credit-card', 'color': 'warning'},
+        'cheque': {'name': 'Chèque', 'total': cheque_total, 'icon': 'fas fa-money-check', 'color': 'info'},
+        'transfer': {'name': 'Virement bancaire', 'total': transfer_total, 'icon': 'fas fa-exchange-alt', 'color': 'secondary'},
+        'other': {'name': 'Autre', 'total': other_total, 'icon': 'fas fa-question', 'color': 'dark'},
+        'no_method': {'name': 'Non spécifié', 'total': no_method_total, 'icon': 'fas fa-minus', 'color': 'muted'},
+    }
+
+    # Calculs pour dépôts bancaires vs argent en main
+    bank_deposits = debit_total + credit_total + transfer_total + cheque_total  # Argent qui va directement en banque
+    cash_in_hand = cash_total  # Argent comptant à déposer manuellement
+    total_tracked_payments = sum(data['total'] for data in payment_methods_data.values())
+
     # Répartition par catégorie
     expense_by_category = period_expenses.values('category').annotate(
         total=Sum('amount')
@@ -929,6 +955,11 @@ def financial_reports(request):
         'revenue_by_service': revenue_by_service,
         'paid_invoices_count': paid_invoices.count(),
         'expenses_count': period_expenses.count(),
+        # Nouveaux données de paiement
+        'payment_methods_data': payment_methods_data,
+        'bank_deposits': bank_deposits,
+        'cash_in_hand': cash_in_hand,
+        'total_tracked_payments': total_tracked_payments,
     }
 
     return render(request, 'garage_app/reports/financial_reports.html', context)

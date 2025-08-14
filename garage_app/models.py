@@ -170,7 +170,9 @@ class InventoryItem(models.Model):
 
     @property
     def total_value(self):
-        return self.quantity_in_stock * self.unit_cost
+        if self.unit_cost is not None:
+            return self.quantity_in_stock * self.unit_cost
+        return 0
 
 
 class Invoice(models.Model):

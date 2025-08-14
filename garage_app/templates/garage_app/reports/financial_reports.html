@@ -111,6 +111,92 @@
     </div>
 </div>
 
+<!-- Analyse des modes de paiement -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-credit-card me-2"></i>Analyse des modes de paiement</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Résumé des dépôts -->
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title"><i class="fas fa-university me-2"></i>Dépôts bancaires</h6>
+                                <h4 class="text-primary">${{ bank_deposits|floatformat:2 }}</h4>
+                                <small class="text-muted">Argent directement en banque</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title"><i class="fas fa-money-bill-wave me-2"></i>Argent en main</h6>
+                                <h4 class="text-success">${{ cash_in_hand|floatformat:2 }}</h4>
+                                <small class="text-muted">À déposer manuellement</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="card-title"><i class="fas fa-chart-pie me-2"></i>Total suivi</h6>
+                                <h4 class="text-info">${{ total_tracked_payments|floatformat:2 }}</h4>
+                                <small class="text-muted">Paiements avec mode spécifié</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Détail par mode de paiement -->
+                <div class="row">
+                    {% for method_key, method_data in payment_methods_data.items %}
+                        {% if method_data.total > 0 %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card border-{{ method_data.color }}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="card-title mb-1">
+                                                <i class="{{ method_data.icon }} me-2 text-{{ method_data.color }}"></i>
+                                                {{ method_data.name }}
+                                            </h6>
+                                            <h5 class="mb-0 text-{{ method_data.color }}">${{ method_data.total|floatformat:2 }}</h5>
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="text-muted">
+                                                {% if total_tracked_payments > 0 %}
+                                                    {% widthratio method_data.total total_tracked_payments 100 %}%
+                                                {% else %}
+                                                    0%
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                {% if total_tracked_payments != total_revenue %}
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Attention:</strong> Il y a une différence de ${{ total_revenue|sub:total_tracked_payments|floatformat:2 }}
+                    entre le total des revenus et les paiements avec mode spécifié.
+                    Certaines factures n'ont pas de mode de paiement renseigné.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Répartition des dépenses -->
 <div class="row mb-4">
     <div class="col-md-6">

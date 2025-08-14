@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     CompanyProfile, Client, Vehicle, Service, InventoryItem,
-    Invoice, InvoiceItem, Expense, Payment
+    Invoice, InvoiceItem, Expense
 )
 
 
@@ -144,19 +144,14 @@ class InvoiceItemInline(admin.TabularInline):
     readonly_fields = ['total_price']
 
 
-class PaymentInline(admin.TabularInline):
-    model = Payment
-    extra = 0
-    fields = ['amount', 'payment_date', 'payment_method', 'reference']
-
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ['invoice_number', 'client', 'invoice_date', 'due_date', 'total_amount', 'status', 'payment_status']
-    list_filter = ['status', 'invoice_date', 'due_date', 'created_at']
+    list_display = ['invoice_number', 'client', 'invoice_date', 'due_date', 'total_amount', 'status', 'payment_method', 'payment_status']
+    list_filter = ['status', 'payment_method', 'invoice_date', 'due_date', 'created_at']
     search_fields = ['invoice_number', 'client__first_name', 'client__last_name']
     readonly_fields = ['invoice_number', 'subtotal', 'gst_amount', 'qst_amount', 'total_amount', 'created_at', 'updated_at']
-    inlines = [InvoiceItemInline, PaymentInline]
+    inlines = [InvoiceItemInline]
 
     fieldsets = (
         ('Informations de base', {
@@ -165,8 +160,8 @@ class InvoiceAdmin(admin.ModelAdmin):
         ('Montants', {
             'fields': ('subtotal', 'gst_amount', 'qst_amount', 'total_amount')
         }),
-        ('Statut et notes', {
-            'fields': ('status', 'notes')
+        ('Statut et paiement', {
+            'fields': ('status', 'payment_method', 'notes')
         }),
         ('Métadonnées', {
             'fields': ('created_at', 'updated_at'),
@@ -247,28 +242,6 @@ class ExpenseAdmin(admin.ModelAdmin):
     has_receipt.short_description = 'Reçu'
 
 
-@admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
-    list_display = ['invoice', 'amount', 'payment_date', 'payment_method', 'reference']
-    list_filter = ['payment_method', 'payment_date', 'created_at']
-    search_fields = ['invoice__invoice_number', 'reference', 'notes']
-    readonly_fields = ['created_at', 'updated_at']
-
-    fieldsets = (
-        ('Informations de base', {
-            'fields': ('invoice', 'amount', 'payment_date')
-        }),
-        ('Méthode et référence', {
-            'fields': ('payment_method', 'reference')
-        }),
-        ('Notes', {
-            'fields': ('notes',)
-        }),
-        ('Métadonnées', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 # Personnalisation de l'interface d'administration
