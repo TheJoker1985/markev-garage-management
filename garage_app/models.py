@@ -334,7 +334,9 @@ class InvoiceItem(models.Model):
 
     @property
     def total_price(self):
-        return self.quantity * self.unit_price
+        if self.unit_price is not None:
+            return self.quantity * self.unit_price
+        return Decimal('0.00')
 
     def save(self, *args, **kwargs):
         # Utiliser le prix par défaut du service si pas spécifié
@@ -406,7 +408,10 @@ class Expense(models.Model):
 
     @property
     def total_with_taxes(self):
-        return self.amount + self.gst_amount + self.qst_amount
+        amount = self.amount or Decimal('0.00')
+        gst = self.gst_amount or Decimal('0.00')
+        qst = self.qst_amount or Decimal('0.00')
+        return amount + gst + qst
 
 
 class Payment(models.Model):
