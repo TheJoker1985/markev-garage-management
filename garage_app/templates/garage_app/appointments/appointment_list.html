@@ -1,0 +1,213 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Rendez-vous - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Gestion des rendez-vous</h1>
+            <div>
+                <a href="{% url 'garage_app:appointment_calendar' %}" class="btn btn-info">
+                    <i class="fas fa-calendar me-2"></i>Calendrier
+                </a>
+                <a href="{% url 'garage_app:appointment_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Nouveau rendez-vous
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiques rapides -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h5>{{ today_count }}</h5>
+                <p class="mb-0">Rendez-vous aujourd'hui</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5>{{ pending_count }}</h5>
+                <p class="mb-0">Rendez-vous en attente</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtres de recherche -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="search" class="form-label">Recherche</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ search_query }}" placeholder="Titre, client, description...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">Statut</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="">Tous les statuts</option>
+                            {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="date" name="date" value="{{ date_filter }}">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-search me-1"></i>Filtrer
+                        </button>
+                        <a href="{% url 'garage_app:appointment_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Effacer
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Liste des rendez-vous -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Titre</th>
+                                    <th>Client</th>
+                                    <th>Véhicule</th>
+                                    <th>Date et heure</th>
+                                    <th>Durée</th>
+                                    <th>Prix estimé</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for appointment in page_obj %}
+                                <tr>
+                                    <td>
+                                        <a href="{% url 'garage_app:appointment_detail' appointment.id %}" class="text-decoration-none">
+                                            <strong>{{ appointment.title }}</strong>
+                                        </a>
+                                        {% if appointment.description %}
+                                            <br><small class="text-muted">{{ appointment.description|truncatechars:50 }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'garage_app:client_detail' appointment.client.id %}" class="text-decoration-none">
+                                            {{ appointment.client.full_name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if appointment.vehicle %}
+                                            {{ appointment.vehicle.year }} {{ appointment.vehicle.make }} {{ appointment.vehicle.model }}
+                                        {% else %}
+                                            <span class="text-muted">Non spécifié</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ appointment.start_datetime|date:"d/m/Y H:i" }}
+                                    </td>
+                                    <td>{{ appointment.duration_minutes }} min</td>
+                                    <td>
+                                        {% if appointment.estimated_price %}
+                                            ${{ appointment.estimated_price|floatformat:2 }}
+                                        {% else %}
+                                            <span class="text-muted">Non estimé</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if appointment.status == 'scheduled' %}
+                                            <span class="badge bg-primary">{{ appointment.get_status_display }}</span>
+                                        {% elif appointment.status == 'confirmed' %}
+                                            <span class="badge bg-success">{{ appointment.get_status_display }}</span>
+                                        {% elif appointment.status == 'completed' %}
+                                            <span class="badge bg-info">{{ appointment.get_status_display }}</span>
+                                        {% elif appointment.status == 'cancelled' %}
+                                            <span class="badge bg-danger">{{ appointment.get_status_display }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ appointment.get_status_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'garage_app:appointment_detail' appointment.id %}" 
+                                               class="btn btn-outline-info" title="Voir">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'garage_app:appointment_edit' appointment.id %}" 
+                                               class="btn btn-outline-warning" title="Modifier">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% if appointment.can_create_invoice %}
+                                                <a href="{% url 'garage_app:appointment_create_invoice' appointment.id %}" 
+                                                   class="btn btn-outline-success" title="Créer facture">
+                                                    <i class="fas fa-file-invoice"></i>
+                                                </a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <nav aria-label="Navigation des pages">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}">Première</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}">Précédente</a>
+                                    </li>
+                                {% endif %}
+
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}</span>
+                                </li>
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}">Suivante</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if date_filter %}&date={{ date_filter }}{% endif %}">Dernière</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-calendar-alt fa-3x text-muted mb-3"></i>
+                        <h4>Aucun rendez-vous trouvé</h4>
+                        <p class="text-muted">Commencez par créer votre premier rendez-vous.</p>
+                        <a href="{% url 'garage_app:appointment_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Nouveau rendez-vous
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

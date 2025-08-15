@@ -2,8 +2,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.http import HttpResponse, JsonResponse
+from django.core.paginator import Paginator
 from datetime import date, timedelta
 from .models import (
     Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem,
