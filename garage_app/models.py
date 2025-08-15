@@ -217,11 +217,13 @@ class Service(models.Model):
 
     # Catégories de services
     CATEGORY_CHOICES = [
+        ('package', 'Forfaits Signature'),
         ('tinting', 'Vitres teintées'),
         ('ppf', 'Protection pare-pierre (PPF)'),
-        ('wrapping', 'Wrapping'),
+        ('wrapping', 'Wrapping / Personnalisation'),
+        ('ceramic', 'Protection céramique'),
         ('hydrophobic', 'Protection hydrophobe'),
-        ('detailing', 'Esthétique (compound, polissage)'),
+        ('detailing', 'Esthétique & Correction de peinture'),
         ('other', 'Autre'),
     ]
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other', verbose_name="Catégorie")

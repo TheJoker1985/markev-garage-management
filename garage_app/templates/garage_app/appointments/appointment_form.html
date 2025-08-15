@@ -17,7 +17,17 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="{{ form.title.id_for_label }}" class="form-label">{{ form.title.label }}</label>
-                                {{ form.title }}
+                                <div class="input-group">
+                                    {{ form.title }}
+                                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Services
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end" id="services-dropdown">
+                                        <li><h6 class="dropdown-header">Sélectionner un service</h6></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <!-- Les services seront ajoutés ici par JavaScript -->
+                                    </ul>
+                                </div>
                                 {% if form.title.errors %}
                                     <div class="text-danger">
                                         {% for error in form.title.errors %}
@@ -25,6 +35,7 @@
                                         {% endfor %}
                                     </div>
                                 {% endif %}
+                                <div class="form-text">Sélectionnez un service dans le menu déroulant ou saisissez un titre personnalisé.</div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -40,6 +51,12 @@
                                 {% endif %}
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Champ caché pour les services sélectionnés -->
+                    <div style="display: none;">
+                        {{ form.estimated_services }}
+                    </div>
                     </div>
 
                     <div class="row">
@@ -122,6 +139,7 @@
                                 {% endfor %}
                             </div>
                         {% endif %}
+                        <div class="form-text">Le prix se calcule automatiquement selon les services sélectionnés, mais vous pouvez le modifier manuellement.</div>
                     </div>
 
                     <div class="d-flex justify-content-between">
@@ -139,15 +157,139 @@
 </div>
 
 <script>
-// Script pour filtrer les véhicules selon le client sélectionné
 document.addEventListener('DOMContentLoaded', function() {
     const clientSelect = document.getElementById('{{ form.client.id_for_label }}');
     const vehicleSelect = document.getElementById('{{ form.vehicle.id_for_label }}');
-    
+    const titleInput = document.getElementById('{{ form.title.id_for_label }}');
+    const priceInput = document.getElementById('{{ form.estimated_price.id_for_label }}');
+    const servicesDropdown = document.getElementById('services-dropdown');
+    const estimatedServicesField = document.getElementById('{{ form.estimated_services.id_for_label }}');
+
+    let servicesData = {};
+    let selectedServices = [];
+    let titleManuallyChanged = false;
+    let priceManuallyChanged = false;
+
+    // Charger les données des services et construire le menu déroulant
+    fetch('/ajax/get-services/')
+        .then(response => response.json())
+        .then(data => {
+            servicesData = {};
+            data.services.forEach(service => {
+                servicesData[service.id] = service;
+            });
+            buildServicesDropdown(data.services);
+        })
+        .catch(error => {
+            console.error('Erreur lors du chargement des services:', error);
+        });
+
+    function buildServicesDropdown(services) {
+        // Grouper les services par catégorie
+        const categories = {
+            'tinting': 'Vitres teintées',
+            'ppf': 'Protection pare-pierre (PPF)',
+            'wrapping': 'Wrapping',
+            'hydrophobic': 'Protection hydrophobe',
+            'detailing': 'Esthétique (compound, polissage)',
+            'other': 'Autre'
+        };
+
+        const servicesByCategory = {};
+        services.forEach(service => {
+            if (!servicesByCategory[service.category]) {
+                servicesByCategory[service.category] = [];
+            }
+            servicesByCategory[service.category].push(service);
+        });
+
+        // Construire le HTML du menu déroulant
+        let dropdownHTML = '<li><h6 class="dropdown-header">Sélectionner un service</h6></li>';
+        dropdownHTML += '<li><hr class="dropdown-divider"></li>';
+
+        Object.keys(categories).forEach(categoryKey => {
+            if (servicesByCategory[categoryKey] && servicesByCategory[categoryKey].length > 0) {
+                dropdownHTML += `<li><h6 class="dropdown-header">${categories[categoryKey]}</h6></li>`;
+                servicesByCategory[categoryKey].forEach(service => {
+                    dropdownHTML += `
+                        <li>
+                            <a class="dropdown-item service-item" href="#" data-service-id="${service.id}" data-service-name="${service.name}" data-service-price="${service.default_price}">
+                                ${service.name} <span class="text-muted">($${service.default_price})</span>
+                            </a>
+                        </li>
+                    `;
+                });
+                dropdownHTML += '<li><hr class="dropdown-divider"></li>';
+            }
+        });
+
+        // Ajouter option pour titre personnalisé
+        dropdownHTML += '<li><a class="dropdown-item" href="#" id="custom-title-option"><em>Titre personnalisé</em></a></li>';
+
+        servicesDropdown.innerHTML = dropdownHTML;
+
+        // Ajouter les gestionnaires d'événements
+        document.querySelectorAll('.service-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const serviceId = parseInt(this.dataset.serviceId);
+                const serviceName = this.dataset.serviceName;
+                const servicePrice = parseFloat(this.dataset.servicePrice);
+
+                selectService(serviceId, serviceName, servicePrice);
+            });
+        });
+
+        document.getElementById('custom-title-option').addEventListener('click', function(e) {
+            e.preventDefault();
+            titleInput.focus();
+            titleManuallyChanged = true;
+        });
+    }
+
+    function selectService(serviceId, serviceName, servicePrice) {
+        // Mettre à jour le titre
+        titleInput.value = serviceName;
+        titleManuallyChanged = false; // Permettre les futures mises à jour automatiques
+
+        // Mettre à jour le prix
+        if (!priceManuallyChanged) {
+            priceInput.value = servicePrice.toFixed(2);
+        }
+
+        // Mettre à jour le champ caché des services estimés
+        updateEstimatedServicesField([serviceId]);
+
+        selectedServices = [servicesData[serviceId]];
+    }
+
+    function updateEstimatedServicesField(serviceIds) {
+        // Décocher toutes les checkboxes
+        const checkboxes = document.querySelectorAll('input[name="estimated_services"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = serviceIds.includes(parseInt(checkbox.value));
+        });
+    }
+
+    // Détecter si l'utilisateur modifie manuellement le titre
+    if (titleInput) {
+        titleInput.addEventListener('input', function() {
+            titleManuallyChanged = true;
+        });
+    }
+
+    // Détecter si l'utilisateur modifie manuellement le prix
+    if (priceInput) {
+        priceInput.addEventListener('input', function() {
+            priceManuallyChanged = true;
+        });
+    }
+
+    // Script pour filtrer les véhicules selon le client sélectionné
     if (clientSelect && vehicleSelect) {
         clientSelect.addEventListener('change', function() {
             const clientId = this.value;
-            
+
             if (clientId) {
                 fetch(`/ajax/get-vehicles/${clientId}/`)
                     .then(response => response.json())

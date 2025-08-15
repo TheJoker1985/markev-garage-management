@@ -7,17 +7,60 @@
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Inventaire</h1>
+            <h1>Gestion de l'inventaire</h1>
             <div>
-                <a href="{% url 'garage_app:stock_receipt_create' %}" class="btn btn-success">
-                    <i class="fas fa-truck"></i> Réception de commande
+                <a href="{% url 'garage_app:supplier_list' %}" class="btn btn-info me-2">
+                    <i class="fas fa-building me-2"></i>Fournisseurs
+                </a>
+                <a href="{% url 'garage_app:stock_receipt_list' %}" class="btn btn-success me-2">
+                    <i class="fas fa-truck me-2"></i>Réception de commande
                 </a>
                 <a href="{% url 'admin:garage_app_inventoryitem_add' %}" class="btn btn-primary">
-                    <i class="fas fa-plus"></i> Nouvel article
+                    <i class="fas fa-plus me-2"></i>Nouvel article
                 </a>
             </div>
         </div>
+    </div>
+</div>
 
+<!-- Statistiques rapides -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h5>{{ total_items }}</h5>
+                <p class="mb-0">Articles en stock</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h5>${{ total_value|floatformat:2 }}</h5>
+                <p class="mb-0">Valeur totale</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5>{{ low_stock_items }}</h5>
+                <p class="mb-0">Stock faible</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h5>{{ total_suppliers }}</h5>
+                <p class="mb-0">Fournisseurs actifs</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
         <!-- Filtres et recherche -->
         <div class="card mb-4">
             <div class="card-body">

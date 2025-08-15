@@ -113,16 +113,24 @@
         position: absolute;
         top: 5px;
         right: 5px;
-        background-color: #dc3545;
+        background-color: #0d6efd;
         color: white;
         border-radius: 50%;
-        width: 20px;
+        min-width: 20px;
         height: 20px;
-        font-size: 0.7em;
+        padding: 0 4px;
+        font-size: 0.75em;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .appointment-count:hover {
+        transform: scale(1.1);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.3);
     }
     .appointment-sidebar {
         max-height: 600px;
@@ -372,33 +380,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (appointments[dateStr]) {
             const dayAppointments = appointments[dateStr];
 
-            // Afficher jusqu'à 3 rendez-vous
-            const maxVisible = 3;
-            for (let i = 0; i < Math.min(dayAppointments.length, maxVisible); i++) {
-                const apt = dayAppointments[i];
-                const aptEl = document.createElement('div');
-                aptEl.className = `appointment-mini status-${apt.status}`;
-                aptEl.textContent = `${apt.start_time} ${apt.title}`;
-                aptEl.title = `${apt.title} - ${apt.client}`;
-                aptEl.onclick = () => window.location.href = `/appointments/${apt.id}/`;
-                appointmentsEl.appendChild(aptEl);
-            }
-
-            // Afficher le nombre total si plus de 3
-            if (dayAppointments.length > maxVisible) {
+            // Afficher seulement le nombre de rendez-vous
+            if (dayAppointments.length > 0) {
                 const countEl = document.createElement('div');
                 countEl.className = 'appointment-count';
                 countEl.textContent = dayAppointments.length;
+                countEl.title = `${dayAppointments.length} rendez-vous ce jour`;
                 dayEl.appendChild(countEl);
             }
         }
 
         // Gestionnaire de clic pour sélectionner la date
         dayEl.onclick = function(e) {
-            if (e.target.classList.contains('appointment-mini')) {
-                return; // Ne pas traiter le clic si c'est sur un rendez-vous
-            }
-
             // Retirer la sélection précédente
             document.querySelectorAll('.calendar-day.selected').forEach(el => {
                 el.classList.remove('selected');

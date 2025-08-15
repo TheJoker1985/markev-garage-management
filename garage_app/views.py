@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from datetime import date, timedelta
@@ -259,7 +259,7 @@ def service_list(request):
     search_query = request.GET.get('search', '')
     category_filter = request.GET.get('category', '')
 
-    services = Service.objects.all()
+    services = Service.objects.all().order_by('default_price', 'name')
 
     if search_query:
         services = services.filter(
@@ -1677,6 +1677,13 @@ def inventory_list(request):
     categories = InventoryItem.INVENTORY_CATEGORY_CHOICES
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
 
+    # Calcul des statistiques
+    all_items = InventoryItem.objects.all()
+    total_items = all_items.count()
+    total_value = sum(item.quantity_in_stock * item.unit_cost for item in all_items)
+    low_stock_items = all_items.filter(quantity_in_stock__lte=F('minimum_stock_level')).count()
+    total_suppliers = suppliers.count()
+
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
@@ -1684,6 +1691,10 @@ def inventory_list(request):
         'supplier_filter': supplier_filter,
         'categories': categories,
         'suppliers': suppliers,
+        'total_items': total_items,
+        'total_value': total_value,
+        'low_stock_items': low_stock_items,
+        'total_suppliers': total_suppliers,
     }
 
     return render(request, 'garage_app/inventory/inventory_list.html', context)
@@ -1848,3 +1859,20 @@ def stock_receipt_process(request, stock_receipt_id):
     }
 
     return render(request, 'garage_app/stock_receipts/stock_receipt_process.html', context)
+
+
+@login_required
+def get_services_ajax(request):
+    """API AJAX pour récupérer les informations des services"""
+    services = Service.objects.filter(is_active=True).order_by('default_price', 'name').values('id', 'name', 'default_price', 'category')
+
+    services_data = []
+    for service in services:
+        services_data.append({
+            'id': service['id'],
+            'name': service['name'],
+            'default_price': float(service['default_price']),
+            'category': service['category']
+        })
+
+    return JsonResponse({'services': services_data})
