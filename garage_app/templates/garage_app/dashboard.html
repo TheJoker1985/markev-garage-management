@@ -6,6 +6,19 @@
 <div class="row">
     <div class="col-12">
         <h1 class="mb-4">Tableau de bord</h1>
+        {% if has_company_profile %}
+            <div class="alert alert-info">
+                <i class="fas fa-calendar-alt me-2"></i>
+                <strong>Période fiscale:</strong> {{ fiscal_year_label }}
+            </div>
+        {% else %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Configuration requise:</strong>
+                <a href="{% url 'garage_app:company_profile' %}" class="alert-link">Configurez votre profil d'entreprise</a>
+                pour utiliser les périodes fiscales personnalisées.
+            </div>
+        {% endif %}
     </div>
 </div>
 
@@ -32,7 +45,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h6 class="card-title">Revenus {{ current_year }}</h6>
+                        <h6 class="card-title">Revenus {{ fiscal_year_label }}</h6>
                         <h4>${{ yearly_revenue|floatformat:2 }}</h4>
                     </div>
                     <div class="align-self-center">

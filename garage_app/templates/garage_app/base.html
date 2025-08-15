@@ -269,6 +269,52 @@
                         <i class="fas fa-receipt me-2"></i>Dépenses
                     </a>
                 </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}" href="#" id="suppliersDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-building me-2"></i>Fournisseurs
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'garage_app:supplier_list' %}">
+                            <i class="fas fa-list me-2"></i>Liste des fournisseurs
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:supplier_create' %}">
+                            <i class="fas fa-plus me-2"></i>Nouveau fournisseur
+                        </a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if 'recurring' in request.resolver_match.url_name %}active{% endif %}" href="#" id="recurringDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-sync-alt me-2"></i>Dépenses récurrentes
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'garage_app:recurring_expense_list' %}">
+                            <i class="fas fa-list me-2"></i>Liste des dépenses récurrentes
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:recurring_expense_create' %}">
+                            <i class="fas fa-plus me-2"></i>Nouvelle dépense récurrente
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:create_due_recurring_expenses' %}">
+                            <i class="fas fa-play me-2"></i>Créer les dépenses dues
+                        </a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if 'appointment' in request.resolver_match.url_name %}active{% endif %}" href="#" id="appointmentsDropdown" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-calendar-alt me-2"></i>Rendez-vous
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{% url 'garage_app:appointment_calendar' %}">
+                            <i class="fas fa-calendar me-2"></i>Calendrier
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:appointment_list' %}">
+                            <i class="fas fa-list me-2"></i>Liste des rendez-vous
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:appointment_create' %}">
+                            <i class="fas fa-plus me-2"></i>Nouveau rendez-vous
+                        </a></li>
+                    </ul>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link {% if 'reports' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:financial_reports' %}">
                         <i class="fas fa-chart-bar me-2"></i>Rapports

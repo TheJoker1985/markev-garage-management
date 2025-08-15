@@ -14,7 +14,15 @@
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item" href="?period=current_month">Mois en cours</a></li>
                     <li><a class="dropdown-item" href="?period=last_month">Mois dernier</a></li>
-                    <li><a class="dropdown-item" href="?period=current_year">Année en cours</a></li>
+                    {% if has_company_profile %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Périodes fiscales</h6></li>
+                        <li><a class="dropdown-item" href="?period=current_fiscal_year">Année fiscale en cours</a></li>
+                        <li><a class="dropdown-item" href="?period=last_fiscal_year">Année fiscale précédente</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Périodes civiles</h6></li>
+                    {% endif %}
+                    <li><a class="dropdown-item" href="?period=current_year">Année civile en cours</a></li>
                 </ul>
             </div>
         </div>

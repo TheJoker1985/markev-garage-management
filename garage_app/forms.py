@@ -1,7 +1,10 @@
 from django import forms
 from django.forms import inlineformset_factory
-from .models import CompanyProfile, Client, Vehicle, Service, Invoice, InvoiceItem, Expense
-from datetime import date, timedelta
+from .models import (
+    CompanyProfile, Client, Vehicle, Service, Invoice, InvoiceItem, Expense,
+    Supplier, RecurringExpense, Appointment, InventoryItem
+)
+from datetime import date, timedelta, datetime
 
 
 class CompanyProfileForm(forms.ModelForm):
@@ -11,7 +14,8 @@ class CompanyProfileForm(forms.ModelForm):
         model = CompanyProfile
         fields = [
             'name', 'address', 'phone', 'email', 'website', 'logo',
-            'gst_number', 'qst_number', 'is_tax_registered'
+            'gst_number', 'qst_number', 'is_tax_registered',
+            'fiscal_year_end_month', 'fiscal_year_end_day'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nom de l\'entreprise'}),
@@ -23,6 +27,8 @@ class CompanyProfileForm(forms.ModelForm):
             'gst_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '123456789RT0001'}),
             'qst_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1234567890TQ0001'}),
             'is_tax_registered': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'fiscal_year_end_month': forms.Select(attrs={'class': 'form-select'}),
+            'fiscal_year_end_day': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '31'}),
         }
         
     def __init__(self, *args, **kwargs):
@@ -201,13 +207,21 @@ class InvoiceItemForm(forms.ModelForm):
 
     class Meta:
         model = InvoiceItem
-        fields = ['service', 'description', 'quantity', 'unit_price']
+        fields = ['item_type', 'service', 'inventory_item', 'description', 'quantity', 'unit_price']
         widgets = {
+            'item_type': forms.Select(attrs={'class': 'form-select'}),
             'service': forms.Select(attrs={'class': 'form-select'}),
+            'inventory_item': forms.Select(attrs={'class': 'form-select'}),
             'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description personnalisée'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
             'unit_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrer les articles d'inventaire actifs
+        self.fields['inventory_item'].queryset = InventoryItem.objects.filter(is_active=True)
+        self.fields['service'].queryset = Service.objects.filter(is_active=True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -239,9 +253,10 @@ class ExpenseForm(forms.ModelForm):
 
     class Meta:
         model = Expense
-        fields = ['description', 'amount', 'expense_date', 'category', 'gst_amount', 'qst_amount', 'receipt', 'notes']
+        fields = ['description', 'supplier', 'amount', 'expense_date', 'category', 'gst_amount', 'qst_amount', 'receipt', 'notes']
         widgets = {
             'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description de la dépense'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
             'expense_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
@@ -253,6 +268,10 @@ class ExpenseForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Filtrer les fournisseurs actifs
+        self.fields['supplier'].queryset = Supplier.objects.filter(is_active=True)
+        self.fields['supplier'].empty_label = "Sélectionner un fournisseur (optionnel)"
 
         # Champs obligatoires
         self.fields['description'].required = True
@@ -277,3 +296,110 @@ class ExpenseForm(forms.ModelForm):
         self.fields['gst_amount'].help_text = 'Montant de TPS payé sur cette dépense'
         self.fields['qst_amount'].help_text = 'Montant de TVQ payé sur cette dépense'
         self.fields['receipt'].help_text = 'Téléversez une copie numérique du reçu'
+
+
+class SupplierForm(forms.ModelForm):
+    """Formulaire pour les fournisseurs"""
+
+    class Meta:
+        model = Supplier
+        fields = [
+            'name', 'contact_person', 'email', 'phone', 'address', 'website',
+            'account_number', 'payment_terms', 'category', 'is_active', 'notes'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nom du fournisseur'}),
+            'contact_person': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Personne contact'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'email@fournisseur.com'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '(514) 123-4567'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Adresse complète'}),
+            'website': forms.URLInput(attrs={'class': 'form-control', 'placeholder': 'https://www.fournisseur.com'}),
+            'account_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Numéro de compte'}),
+            'payment_terms': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Net 30, 2/10 Net 30, etc.'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes additionnelles'}),
+        }
+
+
+class RecurringExpenseForm(forms.ModelForm):
+    """Formulaire pour les dépenses récurrentes"""
+
+    class Meta:
+        model = RecurringExpense
+        fields = [
+            'name', 'description', 'supplier', 'amount', 'category', 'frequency',
+            'start_date', 'end_date', 'next_due_date', 'gst_amount', 'qst_amount',
+            'is_active', 'notes'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nom de la dépense récurrente'}),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description'}),
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
+            'frequency': forms.Select(attrs={'class': 'form-select'}),
+            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'next_due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'gst_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
+            'qst_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes additionnelles'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrer les fournisseurs actifs
+        self.fields['supplier'].queryset = Supplier.objects.filter(is_active=True)
+        self.fields['supplier'].empty_label = "Sélectionner un fournisseur (optionnel)"
+
+        # Définir la date de début par défaut
+        if not self.instance.pk:
+            self.fields['start_date'].initial = date.today()
+            self.fields['next_due_date'].initial = date.today()
+
+
+class AppointmentForm(forms.ModelForm):
+    """Formulaire pour les rendez-vous"""
+
+    class Meta:
+        model = Appointment
+        fields = [
+            'title', 'description', 'client', 'vehicle', 'start_datetime', 'end_datetime',
+            'status', 'estimated_services', 'estimated_price', 'notes'
+        ]
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Titre du rendez-vous'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Description détaillée'}),
+            'client': forms.Select(attrs={'class': 'form-select'}),
+            'vehicle': forms.Select(attrs={'class': 'form-select'}),
+            'start_datetime': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'end_datetime': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'estimated_services': forms.CheckboxSelectMultiple(),
+            'estimated_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes additionnelles'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrer les services actifs
+        self.fields['estimated_services'].queryset = Service.objects.filter(is_active=True)
+
+        # Définir des valeurs par défaut
+        if not self.instance.pk:
+            now = datetime.now()
+            self.fields['start_datetime'].initial = now.replace(minute=0, second=0, microsecond=0)
+            self.fields['end_datetime'].initial = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+
+# Formset pour les éléments de facture
+InvoiceItemFormSet = inlineformset_factory(
+    Invoice,
+    InvoiceItem,
+    form=InvoiceItemForm,
+    extra=1,
+    can_delete=True,
+    fields=['item_type', 'service', 'inventory_item', 'description', 'quantity', 'unit_price']
+)

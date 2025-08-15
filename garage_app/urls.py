@@ -51,4 +51,29 @@ urlpatterns = [
 
     # AJAX endpoints
     path('ajax/get-vehicles/<int:client_id>/', views.get_client_vehicles, name='get_client_vehicles'),
+
+    # URLs pour les fournisseurs
+    path('suppliers/', views.supplier_list, name='supplier_list'),
+    path('suppliers/create/', views.supplier_create, name='supplier_create'),
+    path('suppliers/<int:supplier_id>/', views.supplier_detail, name='supplier_detail'),
+    path('suppliers/<int:supplier_id>/edit/', views.supplier_edit, name='supplier_edit'),
+    path('suppliers/<int:supplier_id>/delete/', views.supplier_delete, name='supplier_delete'),
+
+    # URLs pour les dépenses récurrentes
+    path('recurring-expenses/', views.recurring_expense_list, name='recurring_expense_list'),
+    path('recurring-expenses/create/', views.recurring_expense_create, name='recurring_expense_create'),
+    path('recurring-expenses/<int:recurring_expense_id>/', views.recurring_expense_detail, name='recurring_expense_detail'),
+    path('recurring-expenses/<int:recurring_expense_id>/edit/', views.recurring_expense_edit, name='recurring_expense_edit'),
+    path('recurring-expenses/<int:recurring_expense_id>/delete/', views.recurring_expense_delete, name='recurring_expense_delete'),
+    path('recurring-expenses/create-due/', views.create_due_recurring_expenses, name='create_due_recurring_expenses'),
+
+    # URLs pour les rendez-vous
+    path('appointments/', views.appointment_list, name='appointment_list'),
+    path('appointments/create/', views.appointment_create, name='appointment_create'),
+    path('appointments/<int:appointment_id>/', views.appointment_detail, name='appointment_detail'),
+    path('appointments/<int:appointment_id>/edit/', views.appointment_edit, name='appointment_edit'),
+    path('appointments/<int:appointment_id>/delete/', views.appointment_delete, name='appointment_delete'),
+    path('appointments/<int:appointment_id>/create-invoice/', views.appointment_create_invoice, name='appointment_create_invoice'),
+    path('appointments/calendar/', views.appointment_calendar, name='appointment_calendar'),
+    path('api/appointments/', views.appointment_calendar_api, name='appointment_calendar_api'),
 ]

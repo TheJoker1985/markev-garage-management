@@ -1,0 +1,174 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Calendrier des rendez-vous - MarKev{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
+<style>
+    .fc-event {
+        cursor: pointer;
+    }
+    .fc-event:hover {
+        opacity: 0.8;
+    }
+    #calendar {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Calendrier des rendez-vous</h1>
+            <div>
+                <a href="{% url 'garage_app:appointment_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Nouveau rendez-vous
+                </a>
+                <a href="{% url 'garage_app:appointment_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-list"></i> Liste
+                </a>
+            </div>
+        </div>
+
+        <!-- Légende des couleurs -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h6>Légende des statuts :</h6>
+                <div class="row">
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #6c757d;">Planifié</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #0d6efd;">Confirmé</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #fd7e14;">En cours</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #198754;">Terminé</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #dc3545;">Annulé</span>
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge" style="background-color: #6f42c1;">Absence</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendrier -->
+        <div class="card">
+            <div class="card-body">
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour afficher les détails du rendez-vous -->
+<div class="modal fade" id="appointmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="appointmentModalTitle">Détails du rendez-vous</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="appointmentModalBody">
+                <!-- Contenu dynamique -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                <a href="#" id="appointmentEditBtn" class="btn btn-primary">Modifier</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'fr',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        buttonText: {
+            today: 'Aujourd\'hui',
+            month: 'Mois',
+            week: 'Semaine',
+            day: 'Jour'
+        },
+        events: '{% url "garage_app:appointment_calendar_api" %}',
+        eventClick: function(info) {
+            // Afficher les détails dans le modal
+            var event = info.event;
+            var props = event.extendedProps;
+            
+            document.getElementById('appointmentModalTitle').textContent = event.title;
+            
+            var modalBody = document.getElementById('appointmentModalBody');
+            modalBody.innerHTML = `
+                <div class="row">
+                    <div class="col-sm-4"><strong>Client:</strong></div>
+                    <div class="col-sm-8">${props.client}</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4"><strong>Véhicule:</strong></div>
+                    <div class="col-sm-8">${props.vehicle || 'Non spécifié'}</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4"><strong>Statut:</strong></div>
+                    <div class="col-sm-8">${props.status}</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4"><strong>Début:</strong></div>
+                    <div class="col-sm-8">${event.start.toLocaleString('fr-FR')}</div>
+                </div>
+                <div class="row">
+                    <div class="col-sm-4"><strong>Fin:</strong></div>
+                    <div class="col-sm-8">${event.end.toLocaleString('fr-FR')}</div>
+                </div>
+                ${props.description ? `
+                <div class="row">
+                    <div class="col-sm-4"><strong>Description:</strong></div>
+                    <div class="col-sm-8">${props.description}</div>
+                </div>
+                ` : ''}
+                ${props.estimated_price ? `
+                <div class="row">
+                    <div class="col-sm-4"><strong>Prix estimé:</strong></div>
+                    <div class="col-sm-8">${props.estimated_price} $</div>
+                </div>
+                ` : ''}
+            `;
+            
+            // Lien pour modifier
+            document.getElementById('appointmentEditBtn').href = 
+                `/appointments/${event.id}/edit/`;
+            
+            // Afficher le modal
+            var modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
+            modal.show();
+        },
+        eventDidMount: function(info) {
+            // Ajouter un tooltip
+            info.el.setAttribute('title', 
+                `${info.event.title}\n${info.event.extendedProps.status}`);
+        }
+    });
+    
+    calendar.render();
+});
+</script>
+{% endblock %}

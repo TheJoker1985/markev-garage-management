@@ -5,8 +5,14 @@ from django.contrib import messages
 from django.db.models import Sum, Count
 from django.http import HttpResponse, JsonResponse
 from datetime import date, timedelta
-from .models import Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem
-from .forms import CompanyProfileForm, ClientForm, VehicleForm, ServiceForm, InvoiceForm, InvoiceItemFormSet, ExpenseForm
+from .models import (
+    Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem,
+    Supplier, RecurringExpense, Appointment, InventoryItem
+)
+from .forms import (
+    CompanyProfileForm, ClientForm, VehicleForm, ServiceForm, InvoiceForm,
+    InvoiceItemFormSet, ExpenseForm, SupplierForm, RecurringExpenseForm, AppointmentForm
+)
 from django.core.paginator import Paginator
 from django.db.models import Q
 
@@ -23,29 +29,45 @@ import io
 @login_required
 def dashboard(request):
     """Vue du tableau de bord principal"""
+    # Obtenir le profil d'entreprise pour les périodes fiscales
+    company_profile = CompanyProfile.objects.first()
+
     # Statistiques financières
     today = date.today()
     current_month = today.replace(day=1)
-    current_year = today.replace(month=1, day=1)
+
+    # Utiliser la période fiscale si un profil d'entreprise existe
+    if company_profile:
+        fiscal_year_start, fiscal_year_end = company_profile.get_current_fiscal_year_period()
+        current_fiscal_year = fiscal_year_start
+        fiscal_year_label = f"Année fiscale {company_profile.get_fiscal_year_for_date(today)}"
+    else:
+        # Fallback vers l'année civile si pas de profil configuré
+        current_fiscal_year = today.replace(month=1, day=1)
+        fiscal_year_label = f"Année {today.year}"
 
     # Revenus
     monthly_revenue = Invoice.objects.filter(
         invoice_date__gte=current_month,
-        status='paid'
+        status='paid',
+        archived_fiscal_year__isnull=True  # Exclure les données archivées
     ).aggregate(total=Sum('total_amount'))['total'] or 0
 
     yearly_revenue = Invoice.objects.filter(
-        invoice_date__gte=current_year,
-        status='paid'
+        invoice_date__gte=current_fiscal_year,
+        status='paid',
+        archived_fiscal_year__isnull=True  # Exclure les données archivées
     ).aggregate(total=Sum('total_amount'))['total'] or 0
 
     # Dépenses
     monthly_expenses = Expense.objects.filter(
-        expense_date__gte=current_month
+        expense_date__gte=current_month,
+        archived_fiscal_year__isnull=True  # Exclure les données archivées
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     yearly_expenses = Expense.objects.filter(
-        expense_date__gte=current_year
+        expense_date__gte=current_fiscal_year,
+        archived_fiscal_year__isnull=True  # Exclure les données archivées
     ).aggregate(total=Sum('amount'))['total'] or 0
 
     # Profit
@@ -75,7 +97,8 @@ def dashboard(request):
         'total_clients': total_clients,
         'total_services': total_services,
         'current_month': current_month.strftime('%B %Y'),
-        'current_year': current_year.year,
+        'fiscal_year_label': fiscal_year_label,
+        'has_company_profile': company_profile is not None,
     }
 
     return render(request, 'garage_app/dashboard.html', context)
@@ -860,6 +883,9 @@ def expense_delete(request, expense_id):
 @login_required
 def financial_reports(request):
     """Vue pour les rapports financiers"""
+    # Obtenir le profil d'entreprise pour les périodes fiscales
+    company_profile = CompanyProfile.objects.first()
+
     # Période sélectionnée
     period = request.GET.get('period', 'current_month')
 
@@ -869,10 +895,31 @@ def financial_reports(request):
         start_date = today.replace(day=1)
         end_date = today
         period_name = f"{start_date.strftime('%B %Y')}"
+    elif period == 'current_fiscal_year':
+        if company_profile:
+            start_date, end_date = company_profile.get_current_fiscal_year_period()
+            end_date = min(end_date, today)  # Ne pas dépasser aujourd'hui
+            fiscal_year = company_profile.get_fiscal_year_for_date(today)
+            period_name = f"Année fiscale {fiscal_year}"
+        else:
+            # Fallback vers l'année civile
+            start_date = today.replace(month=1, day=1)
+            end_date = today
+            period_name = f"Année {today.year}"
     elif period == 'current_year':
         start_date = today.replace(month=1, day=1)
         end_date = today
-        period_name = f"Année {today.year}"
+        period_name = f"Année civile {today.year}"
+    elif period == 'last_fiscal_year':
+        if company_profile:
+            current_fiscal_year = company_profile.get_fiscal_year_for_date(today)
+            start_date, end_date = company_profile.get_fiscal_year_period(current_fiscal_year - 1)
+            period_name = f"Année fiscale {current_fiscal_year - 1}"
+        else:
+            # Fallback vers l'année civile précédente
+            start_date = today.replace(year=today.year-1, month=1, day=1)
+            end_date = today.replace(year=today.year-1, month=12, day=31)
+            period_name = f"Année {today.year - 1}"
     elif period == 'last_month':
         if today.month == 1:
             start_date = today.replace(year=today.year-1, month=12, day=1)
@@ -891,11 +938,12 @@ def financial_reports(request):
         period_name = f"{start_date.strftime('%B %Y')}"
 
     # Calculs financiers
-    # Revenus
+    # Revenus (exclure les données archivées)
     paid_invoices = Invoice.objects.filter(
         invoice_date__gte=start_date,
         invoice_date__lte=end_date,
-        status='paid'
+        status='paid',
+        archived_fiscal_year__isnull=True
     )
 
     total_revenue = paid_invoices.aggregate(total=Sum('total_amount'))['total'] or 0
@@ -903,10 +951,11 @@ def financial_reports(request):
     total_gst_collected = paid_invoices.aggregate(total=Sum('gst_amount'))['total'] or 0
     total_qst_collected = paid_invoices.aggregate(total=Sum('qst_amount'))['total'] or 0
 
-    # Dépenses
+    # Dépenses (exclure les données archivées)
     period_expenses = Expense.objects.filter(
         expense_date__gte=start_date,
-        expense_date__lte=end_date
+        expense_date__lte=end_date,
+        archived_fiscal_year__isnull=True
     )
 
     total_expenses = period_expenses.aggregate(total=Sum('amount'))['total'] or 0
@@ -985,6 +1034,9 @@ def financial_reports(request):
         'cash_in_hand': cash_in_hand,
         'total_tracked_payments': total_tracked_payments,
         'payment_tracking_difference': payment_tracking_difference,
+        # Informations sur les périodes fiscales
+        'has_company_profile': company_profile is not None,
+        'company_profile': company_profile,
     }
 
     return render(request, 'garage_app/reports/financial_reports.html', context)
@@ -1013,3 +1065,504 @@ def get_client_vehicles(request, client_id):
 
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+# ==================== VUES POUR LES FOURNISSEURS ====================
+
+@login_required
+def supplier_list(request):
+    """Vue pour lister les fournisseurs"""
+    search_query = request.GET.get('search', '')
+    category_filter = request.GET.get('category', '')
+
+    suppliers = Supplier.objects.all()
+
+    if search_query:
+        suppliers = suppliers.filter(
+            Q(name__icontains=search_query) |
+            Q(contact_person__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(phone__icontains=search_query)
+        )
+
+    if category_filter:
+        suppliers = suppliers.filter(category=category_filter)
+
+    suppliers = suppliers.order_by('name')
+
+    # Pagination
+    paginator = Paginator(suppliers, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Catégories pour le filtre
+    categories = Supplier.SUPPLIER_CATEGORY_CHOICES
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'category_filter': category_filter,
+        'categories': categories,
+    }
+
+    return render(request, 'garage_app/suppliers/supplier_list.html', context)
+
+
+@login_required
+def supplier_detail(request, supplier_id):
+    """Vue pour afficher les détails d'un fournisseur"""
+    supplier = get_object_or_404(Supplier, id=supplier_id)
+
+    # Statistiques du fournisseur
+    recent_expenses = supplier.expenses.order_by('-expense_date')[:10]
+    total_expenses = supplier.expenses.aggregate(total=Sum('amount'))['total'] or 0
+    expense_count = supplier.expenses.count()
+
+    context = {
+        'supplier': supplier,
+        'recent_expenses': recent_expenses,
+        'total_expenses': total_expenses,
+        'expense_count': expense_count,
+    }
+
+    return render(request, 'garage_app/suppliers/supplier_detail.html', context)
+
+
+@login_required
+def supplier_create(request):
+    """Vue pour créer un nouveau fournisseur"""
+    if request.method == 'POST':
+        form = SupplierForm(request.POST)
+        if form.is_valid():
+            supplier = form.save()
+            messages.success(request, f'Fournisseur "{supplier.name}" créé avec succès.')
+            return redirect('garage_app:supplier_detail', supplier_id=supplier.id)
+    else:
+        form = SupplierForm()
+
+    context = {
+        'form': form,
+        'title': 'Nouveau fournisseur',
+    }
+
+    return render(request, 'garage_app/suppliers/supplier_form.html', context)
+
+
+@login_required
+def supplier_edit(request, supplier_id):
+    """Vue pour modifier un fournisseur"""
+    supplier = get_object_or_404(Supplier, id=supplier_id)
+
+    if request.method == 'POST':
+        form = SupplierForm(request.POST, instance=supplier)
+        if form.is_valid():
+            supplier = form.save()
+            messages.success(request, f'Fournisseur "{supplier.name}" modifié avec succès.')
+            return redirect('garage_app:supplier_detail', supplier_id=supplier.id)
+    else:
+        form = SupplierForm(instance=supplier)
+
+    context = {
+        'form': form,
+        'supplier': supplier,
+        'title': f'Modifier {supplier.name}',
+    }
+
+    return render(request, 'garage_app/suppliers/supplier_form.html', context)
+
+
+@login_required
+def supplier_delete(request, supplier_id):
+    """Vue pour supprimer un fournisseur"""
+    supplier = get_object_or_404(Supplier, id=supplier_id)
+
+    if request.method == 'POST':
+        supplier_name = supplier.name
+        supplier.delete()
+        messages.success(request, f'Fournisseur "{supplier_name}" supprimé avec succès.')
+        return redirect('garage_app:supplier_list')
+
+    context = {
+        'supplier': supplier,
+    }
+
+    return render(request, 'garage_app/suppliers/supplier_confirm_delete.html', context)
+
+
+# ==================== VUES POUR LES DÉPENSES RÉCURRENTES ====================
+
+@login_required
+def recurring_expense_list(request):
+    """Vue pour lister les dépenses récurrentes"""
+    search_query = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+
+    recurring_expenses = RecurringExpense.objects.all()
+
+    if search_query:
+        recurring_expenses = recurring_expenses.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(supplier__name__icontains=search_query)
+        )
+
+    if status_filter == 'active':
+        recurring_expenses = recurring_expenses.filter(is_active=True)
+    elif status_filter == 'inactive':
+        recurring_expenses = recurring_expenses.filter(is_active=False)
+    elif status_filter == 'due':
+        recurring_expenses = recurring_expenses.filter(
+            is_active=True,
+            next_due_date__lte=date.today()
+        )
+
+    recurring_expenses = recurring_expenses.order_by('next_due_date', 'name')
+
+    # Pagination
+    paginator = Paginator(recurring_expenses, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Statistiques
+    due_count = RecurringExpense.objects.filter(
+        is_active=True,
+        next_due_date__lte=date.today()
+    ).count()
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'due_count': due_count,
+    }
+
+    return render(request, 'garage_app/recurring_expenses/recurring_expense_list.html', context)
+
+
+@login_required
+def recurring_expense_detail(request, recurring_expense_id):
+    """Vue pour afficher les détails d'une dépense récurrente"""
+    recurring_expense = get_object_or_404(RecurringExpense, id=recurring_expense_id)
+
+    # Historique des dépenses créées
+    related_expenses = Expense.objects.filter(
+        description__icontains=recurring_expense.name
+    ).order_by('-expense_date')[:10]
+
+    context = {
+        'recurring_expense': recurring_expense,
+        'related_expenses': related_expenses,
+    }
+
+    return render(request, 'garage_app/recurring_expenses/recurring_expense_detail.html', context)
+
+
+@login_required
+def recurring_expense_create(request):
+    """Vue pour créer une nouvelle dépense récurrente"""
+    if request.method == 'POST':
+        form = RecurringExpenseForm(request.POST)
+        if form.is_valid():
+            recurring_expense = form.save()
+            messages.success(request, f'Dépense récurrente "{recurring_expense.name}" créée avec succès.')
+            return redirect('garage_app:recurring_expense_detail', recurring_expense_id=recurring_expense.id)
+    else:
+        form = RecurringExpenseForm()
+
+    context = {
+        'form': form,
+        'title': 'Nouvelle dépense récurrente',
+    }
+
+    return render(request, 'garage_app/recurring_expenses/recurring_expense_form.html', context)
+
+
+@login_required
+def recurring_expense_edit(request, recurring_expense_id):
+    """Vue pour modifier une dépense récurrente"""
+    recurring_expense = get_object_or_404(RecurringExpense, id=recurring_expense_id)
+
+    if request.method == 'POST':
+        form = RecurringExpenseForm(request.POST, instance=recurring_expense)
+        if form.is_valid():
+            recurring_expense = form.save()
+            messages.success(request, f'Dépense récurrente "{recurring_expense.name}" modifiée avec succès.')
+            return redirect('garage_app:recurring_expense_detail', recurring_expense_id=recurring_expense.id)
+    else:
+        form = RecurringExpenseForm(instance=recurring_expense)
+
+    context = {
+        'form': form,
+        'recurring_expense': recurring_expense,
+        'title': f'Modifier {recurring_expense.name}',
+    }
+
+    return render(request, 'garage_app/recurring_expenses/recurring_expense_form.html', context)
+
+
+@login_required
+def recurring_expense_delete(request, recurring_expense_id):
+    """Vue pour supprimer une dépense récurrente"""
+    recurring_expense = get_object_or_404(RecurringExpense, id=recurring_expense_id)
+
+    if request.method == 'POST':
+        recurring_expense_name = recurring_expense.name
+        recurring_expense.delete()
+        messages.success(request, f'Dépense récurrente "{recurring_expense_name}" supprimée avec succès.')
+        return redirect('garage_app:recurring_expense_list')
+
+    context = {
+        'recurring_expense': recurring_expense,
+    }
+
+    return render(request, 'garage_app/recurring_expenses/recurring_expense_confirm_delete.html', context)
+
+
+@login_required
+def create_due_recurring_expenses(request):
+    """Vue pour créer les dépenses récurrentes dues"""
+    if request.method == 'POST':
+        from django.core.management import call_command
+        from io import StringIO
+
+        # Capturer la sortie de la commande
+        output = StringIO()
+        try:
+            call_command('create_recurring_expenses', stdout=output)
+            messages.success(request, 'Dépenses récurrentes créées avec succès.')
+        except Exception as e:
+            messages.error(request, f'Erreur lors de la création des dépenses: {str(e)}')
+
+        return redirect('garage_app:recurring_expense_list')
+
+    # Obtenir les dépenses dues
+    due_expenses = RecurringExpense.objects.filter(
+        is_active=True,
+        next_due_date__lte=date.today()
+    )
+
+    context = {
+        'due_expenses': due_expenses,
+    }
+
+    return render(request, 'garage_app/recurring_expenses/create_due_expenses.html', context)
+
+
+# ==================== VUES POUR LES RENDEZ-VOUS ====================
+
+@login_required
+def appointment_list(request):
+    """Vue pour lister les rendez-vous"""
+    search_query = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+    date_filter = request.GET.get('date', '')
+
+    appointments = Appointment.objects.all()
+
+    if search_query:
+        appointments = appointments.filter(
+            Q(title__icontains=search_query) |
+            Q(client__first_name__icontains=search_query) |
+            Q(client__last_name__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    if status_filter:
+        appointments = appointments.filter(status=status_filter)
+
+    if date_filter == 'today':
+        appointments = appointments.filter(start_datetime__date=date.today())
+    elif date_filter == 'week':
+        from datetime import timedelta
+        week_start = date.today() - timedelta(days=date.today().weekday())
+        week_end = week_start + timedelta(days=6)
+        appointments = appointments.filter(
+            start_datetime__date__gte=week_start,
+            start_datetime__date__lte=week_end
+        )
+    elif date_filter == 'month':
+        appointments = appointments.filter(
+            start_datetime__year=date.today().year,
+            start_datetime__month=date.today().month
+        )
+
+    appointments = appointments.order_by('start_datetime')
+
+    # Pagination
+    paginator = Paginator(appointments, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Statistiques
+    today_count = Appointment.objects.filter(start_datetime__date=date.today()).count()
+    pending_count = Appointment.objects.filter(status__in=['scheduled', 'confirmed']).count()
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'date_filter': date_filter,
+        'today_count': today_count,
+        'pending_count': pending_count,
+        'status_choices': Appointment.STATUS_CHOICES,
+    }
+
+    return render(request, 'garage_app/appointments/appointment_list.html', context)
+
+
+@login_required
+def appointment_detail(request, appointment_id):
+    """Vue pour afficher les détails d'un rendez-vous"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+
+    context = {
+        'appointment': appointment,
+    }
+
+    return render(request, 'garage_app/appointments/appointment_detail.html', context)
+
+
+@login_required
+def appointment_create(request):
+    """Vue pour créer un nouveau rendez-vous"""
+    if request.method == 'POST':
+        form = AppointmentForm(request.POST)
+        if form.is_valid():
+            appointment = form.save()
+            messages.success(request, f'Rendez-vous "{appointment.title}" créé avec succès.')
+            return redirect('garage_app:appointment_detail', appointment_id=appointment.id)
+    else:
+        form = AppointmentForm()
+
+    context = {
+        'form': form,
+        'title': 'Nouveau rendez-vous',
+    }
+
+    return render(request, 'garage_app/appointments/appointment_form.html', context)
+
+
+@login_required
+def appointment_edit(request, appointment_id):
+    """Vue pour modifier un rendez-vous"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+
+    if request.method == 'POST':
+        form = AppointmentForm(request.POST, instance=appointment)
+        if form.is_valid():
+            appointment = form.save()
+            messages.success(request, f'Rendez-vous "{appointment.title}" modifié avec succès.')
+            return redirect('garage_app:appointment_detail', appointment_id=appointment.id)
+    else:
+        form = AppointmentForm(instance=appointment)
+
+    context = {
+        'form': form,
+        'appointment': appointment,
+        'title': f'Modifier {appointment.title}',
+    }
+
+    return render(request, 'garage_app/appointments/appointment_form.html', context)
+
+
+@login_required
+def appointment_delete(request, appointment_id):
+    """Vue pour supprimer un rendez-vous"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+
+    if request.method == 'POST':
+        appointment_title = appointment.title
+        appointment.delete()
+        messages.success(request, f'Rendez-vous "{appointment_title}" supprimé avec succès.')
+        return redirect('garage_app:appointment_list')
+
+    context = {
+        'appointment': appointment,
+    }
+
+    return render(request, 'garage_app/appointments/appointment_confirm_delete.html', context)
+
+
+@login_required
+def appointment_create_invoice(request, appointment_id):
+    """Vue pour créer une facture à partir d'un rendez-vous"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+
+    if not appointment.can_create_invoice():
+        messages.error(request, 'Impossible de créer une facture pour ce rendez-vous.')
+        return redirect('garage_app:appointment_detail', appointment_id=appointment.id)
+
+    if request.method == 'POST':
+        try:
+            invoice = appointment.create_invoice_from_appointment()
+            messages.success(request, f'Facture {invoice.invoice_number} créée avec succès.')
+            return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
+        except Exception as e:
+            messages.error(request, f'Erreur lors de la création de la facture: {str(e)}')
+
+    context = {
+        'appointment': appointment,
+    }
+
+    return render(request, 'garage_app/appointments/appointment_create_invoice.html', context)
+
+
+@login_required
+def appointment_calendar(request):
+    """Vue pour afficher le calendrier des rendez-vous"""
+    # Cette vue servira la page du calendrier
+    # Le calendrier sera géré par JavaScript côté client
+
+    context = {
+        'title': 'Calendrier des rendez-vous',
+    }
+
+    return render(request, 'garage_app/appointments/appointment_calendar.html', context)
+
+
+@login_required
+def appointment_calendar_api(request):
+    """API pour récupérer les rendez-vous au format JSON pour le calendrier"""
+    start_date = request.GET.get('start')
+    end_date = request.GET.get('end')
+
+    appointments = Appointment.objects.all()
+
+    if start_date and end_date:
+        from datetime import datetime
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        appointments = appointments.filter(
+            start_datetime__gte=start,
+            end_datetime__lte=end
+        )
+
+    events = []
+    for appointment in appointments:
+        # Couleurs selon le statut
+        color_map = {
+            'scheduled': '#6c757d',  # Gris
+            'confirmed': '#0d6efd',  # Bleu
+            'in_progress': '#fd7e14', # Orange
+            'completed': '#198754',  # Vert
+            'cancelled': '#dc3545',  # Rouge
+            'no_show': '#6f42c1',    # Violet
+        }
+
+        events.append({
+            'id': appointment.id,
+            'title': f"{appointment.title} - {appointment.client.full_name}",
+            'start': appointment.start_datetime.isoformat(),
+            'end': appointment.end_datetime.isoformat(),
+            'backgroundColor': color_map.get(appointment.status, '#6c757d'),
+            'borderColor': color_map.get(appointment.status, '#6c757d'),
+            'extendedProps': {
+                'client': appointment.client.full_name,
+                'vehicle': f"{appointment.vehicle.year} {appointment.vehicle.make} {appointment.vehicle.model}" if appointment.vehicle else '',
+                'status': appointment.get_status_display(),
+                'description': appointment.description or '',
+                'estimated_price': str(appointment.estimated_price) if appointment.estimated_price else '',
+            }
+        })
+
+    return JsonResponse(events, safe=False)

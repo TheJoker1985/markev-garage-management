@@ -1,0 +1,163 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Fournisseurs - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Fournisseurs</h1>
+            <a href="{% url 'garage_app:supplier_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Nouveau fournisseur
+            </a>
+        </div>
+
+        <!-- Filtres et recherche -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Recherche</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ search_query }}" placeholder="Nom, contact, email...">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="category" class="form-label">Catégorie</label>
+                        <select class="form-select" id="category" name="category">
+                            <option value="">Toutes les catégories</option>
+                            {% for value, label in categories %}
+                                <option value="{{ value }}" {% if category_filter == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-search"></i> Filtrer
+                        </button>
+                        <a href="{% url 'garage_app:supplier_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Liste des fournisseurs -->
+        <div class="card">
+            <div class="card-body">
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Contact</th>
+                                    <th>Catégorie</th>
+                                    <th>Total dépenses</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for supplier in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ supplier.name }}</strong>
+                                            {% if supplier.website %}
+                                                <br><small><a href="{{ supplier.website }}" target="_blank">{{ supplier.website }}</a></small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if supplier.contact_person %}
+                                                <strong>{{ supplier.contact_person }}</strong><br>
+                                            {% endif %}
+                                            {% if supplier.email %}
+                                                <a href="mailto:{{ supplier.email }}">{{ supplier.email }}</a><br>
+                                            {% endif %}
+                                            {% if supplier.phone %}
+                                                <a href="tel:{{ supplier.phone }}">{{ supplier.phone }}</a>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ supplier.get_category_display }}</span>
+                                        </td>
+                                        <td>
+                                            <strong>${{ supplier.total_expenses|floatformat:2 }}</strong>
+                                        </td>
+                                        <td>
+                                            {% if supplier.is_active %}
+                                                <span class="badge bg-success">Actif</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactif</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'garage_app:supplier_detail' supplier.id %}" 
+                                                   class="btn btn-outline-primary" title="Voir">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <a href="{% url 'garage_app:supplier_edit' supplier.id %}" 
+                                                   class="btn btn-outline-warning" title="Modifier">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'garage_app:supplier_delete' supplier.id %}" 
+                                                   class="btn btn-outline-danger" title="Supprimer">
+                                                    <i class="fas fa-trash"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <nav aria-label="Navigation des fournisseurs">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">Première</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">Précédente</a>
+                                    </li>
+                                {% endif %}
+
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}
+                                    </span>
+                                </li>
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">Suivante</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">Dernière</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-building fa-3x text-muted mb-3"></i>
+                        <h4>Aucun fournisseur trouvé</h4>
+                        <p class="text-muted">Commencez par ajouter votre premier fournisseur.</p>
+                        <a href="{% url 'garage_app:supplier_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Nouveau fournisseur
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
