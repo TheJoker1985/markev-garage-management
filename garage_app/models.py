@@ -578,6 +578,7 @@ class Expense(models.Model):
     EXPENSE_CATEGORY_CHOICES = [
         ('materials', 'Matériaux'),
         ('tools', 'Outils'),
+        ('inventory', 'Inventaire/Marchandises'),
         ('rent', 'Loyer'),
         ('utilities', 'Services publics'),
         ('insurance', 'Assurance'),
@@ -902,6 +903,212 @@ class RecurringExpense(models.Model):
     def total_with_taxes(self):
         """Calculer le total avec taxes"""
         return self.amount + self.gst_amount + self.qst_amount
+
+
+class StockReceipt(models.Model):
+    """Modèle pour les bons de réception de marchandises"""
+    receipt_number = models.CharField(
+        max_length=50,
+        unique=True,
+        verbose_name="Numéro de bon de réception"
+    )
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name='stock_receipts',
+        verbose_name="Fournisseur"
+    )
+    receipt_date = models.DateField(
+        verbose_name="Date de réception"
+    )
+    supplier_invoice_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name="Numéro de facture fournisseur"
+    )
+
+    # Montants
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Sous-total"
+    )
+    gst_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="TPS"
+    )
+    qst_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="TVQ"
+    )
+    total_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Montant total"
+    )
+
+    # Statut
+    STATUS_CHOICES = [
+        ('draft', 'Brouillon'),
+        ('received', 'Reçu'),
+        ('processed', 'Traité'),
+        ('cancelled', 'Annulé'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='draft',
+        verbose_name="Statut"
+    )
+
+    # Dépense créée automatiquement
+    expense = models.OneToOneField(
+        Expense,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='stock_receipt',
+        verbose_name="Dépense associée"
+    )
+
+    # Notes
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Notes"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Bon de réception"
+        verbose_name_plural = "Bons de réception"
+        ordering = ['-receipt_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.receipt_number} - {self.supplier.name}"
+
+    def save(self, *args, **kwargs):
+        # Générer un numéro de bon de réception si pas défini
+        if not self.receipt_number:
+            from datetime import date
+            today = date.today()
+            last_receipt = StockReceipt.objects.filter(
+                receipt_date__year=today.year
+            ).order_by('-receipt_number').first()
+
+            if last_receipt and last_receipt.receipt_number.startswith(f'BR-{today.year}-'):
+                try:
+                    last_num = int(last_receipt.receipt_number.split('-')[-1])
+                    new_num = last_num + 1
+                except (ValueError, IndexError):
+                    new_num = 1
+            else:
+                new_num = 1
+
+            self.receipt_number = f'BR-{today.year}-{new_num:04d}'
+
+        super().save(*args, **kwargs)
+
+    def calculate_totals(self):
+        """Calculer les totaux basés sur les éléments"""
+        items = self.receipt_items.all()
+        self.subtotal = sum(item.total_price for item in items)
+
+        # Calculer les taxes (si applicable)
+        # Pour simplifier, on peut utiliser les taux standards
+        if self.supplier and hasattr(self.supplier, 'is_tax_applicable'):
+            # Logique de calcul des taxes selon le fournisseur
+            pass
+
+        self.total_amount = self.subtotal + self.gst_amount + self.qst_amount
+        self.save()
+
+    def process_receipt(self):
+        """Traiter le bon de réception : mettre à jour l'inventaire et créer la dépense"""
+        if self.status != 'received':
+            return False
+
+        # Mettre à jour l'inventaire
+        for item in self.receipt_items.all():
+            inventory_item = item.inventory_item
+            inventory_item.quantity_in_stock += item.quantity
+            inventory_item.unit_cost = item.purchase_price  # Mettre à jour le prix d'achat
+            inventory_item.save()
+
+        # Créer la dépense associée
+        if not self.expense:
+            expense = Expense.objects.create(
+                description=f"Réception de marchandises - {self.receipt_number}",
+                supplier=self.supplier,
+                amount=self.subtotal,
+                expense_date=self.receipt_date,
+                category='inventory',
+                gst_amount=self.gst_amount,
+                qst_amount=self.qst_amount,
+                notes=f"Dépense créée automatiquement depuis le bon de réception {self.receipt_number}"
+            )
+            self.expense = expense
+
+        # Marquer comme traité
+        self.status = 'processed'
+        self.save()
+
+        return True
+
+
+class StockReceiptItem(models.Model):
+    """Modèle pour les lignes d'un bon de réception"""
+    stock_receipt = models.ForeignKey(
+        StockReceipt,
+        on_delete=models.CASCADE,
+        related_name='receipt_items',
+        verbose_name="Bon de réception"
+    )
+    inventory_item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.CASCADE,
+        verbose_name="Article"
+    )
+    quantity = models.IntegerField(
+        validators=[MinValueValidator(1)],
+        verbose_name="Quantité reçue"
+    )
+    purchase_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        verbose_name="Prix d'achat unitaire"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Élément de réception"
+        verbose_name_plural = "Éléments de réception"
+        unique_together = ['stock_receipt', 'inventory_item']
+
+    def __str__(self):
+        return f"{self.inventory_item.name} - {self.quantity} unités"
+
+    @property
+    def total_price(self):
+        """Calculer le prix total pour cette ligne"""
+        return self.quantity * self.purchase_price
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Recalculer les totaux du bon de réception
+        self.stock_receipt.calculate_totals()
 
 
 class Appointment(models.Model):

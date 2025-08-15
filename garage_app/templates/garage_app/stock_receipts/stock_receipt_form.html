@@ -1,0 +1,245 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - MarKev{% endblock %}
+
+{% block extra_css %}
+<style>
+    .formset-row {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        background-color: #f8f9fa;
+    }
+    .delete-row {
+        background-color: #f8d7da;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">{{ title }}</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Informations de base -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2">Informations de base</h5>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.supplier.id_for_label }}" class="form-label">
+                                {{ form.supplier.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.supplier }}
+                            {% if form.supplier.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.supplier.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.receipt_date.id_for_label }}" class="form-label">
+                                {{ form.receipt_date.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.receipt_date }}
+                            {% if form.receipt_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.receipt_date.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.supplier_invoice_number.id_for_label }}" class="form-label">
+                                {{ form.supplier_invoice_number.label }}
+                            </label>
+                            {{ form.supplier_invoice_number }}
+                            {% if form.supplier_invoice_number.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.supplier_invoice_number.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">
+                                {{ form.status.label }}
+                            </label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.status.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Articles reçus -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2">Articles reçus</h5>
+                        </div>
+                        <div class="col-12">
+                            {{ formset.management_form }}
+                            <div id="formset-container">
+                                {% for form in formset %}
+                                    <div class="formset-row" data-form-index="{{ forloop.counter0 }}">
+                                        <div class="row">
+                                            <div class="col-md-5 mb-3">
+                                                <label class="form-label">Article</label>
+                                                {{ form.inventory_item }}
+                                                {% if form.inventory_item.errors %}
+                                                    <div class="invalid-feedback d-block">
+                                                        {{ form.inventory_item.errors.0 }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+                                                <label class="form-label">Quantité</label>
+                                                {{ form.quantity }}
+                                                {% if form.quantity.errors %}
+                                                    <div class="invalid-feedback d-block">
+                                                        {{ form.quantity.errors.0 }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-3 mb-3">
+                                                <label class="form-label">Prix d'achat unitaire</label>
+                                                {{ form.purchase_price }}
+                                                {% if form.purchase_price.errors %}
+                                                    <div class="invalid-feedback d-block">
+                                                        {{ form.purchase_price.errors.0 }}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-1 mb-3 d-flex align-items-end">
+                                                {% if form.DELETE %}
+                                                    {{ form.DELETE }}
+                                                    <label for="{{ form.DELETE.id_for_label }}" class="btn btn-outline-danger btn-sm">
+                                                        <i class="fas fa-trash"></i>
+                                                    </label>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        {% for hidden in form.hidden_fields %}
+                                            {{ hidden }}
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <button type="button" id="add-form" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-plus"></i> Ajouter un article
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Taxes -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="border-bottom pb-2">Taxes</h5>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.gst_amount.id_for_label }}" class="form-label">
+                                {{ form.gst_amount.label }}
+                            </label>
+                            {{ form.gst_amount }}
+                            {% if form.gst_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.gst_amount.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.qst_amount.id_for_label }}" class="form-label">
+                                {{ form.qst_amount.label }}
+                            </label>
+                            {{ form.qst_amount }}
+                            {% if form.qst_amount.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.qst_amount.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                {{ form.notes.label }}
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.notes.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Boutons -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'garage_app:stock_receipt_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Retour
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addButton = document.getElementById('add-form');
+    const container = document.getElementById('formset-container');
+    const totalForms = document.getElementById('id_receipt_items-TOTAL_FORMS');
+    
+    addButton.addEventListener('click', function() {
+        const formCount = parseInt(totalForms.value);
+        const newForm = container.children[0].cloneNode(true);
+        
+        // Mettre à jour les attributs du nouveau formulaire
+        newForm.innerHTML = newForm.innerHTML.replace(/-0-/g, `-${formCount}-`);
+        newForm.innerHTML = newForm.innerHTML.replace(/_0_/g, `_${formCount}_`);
+        
+        // Réinitialiser les valeurs
+        const inputs = newForm.querySelectorAll('input, select');
+        inputs.forEach(input => {
+            if (input.type !== 'hidden') {
+                input.value = '';
+            }
+        });
+        
+        // Ajouter le nouveau formulaire
+        container.appendChild(newForm);
+        
+        // Mettre à jour le compteur
+        totalForms.value = formCount + 1;
+    });
+    
+    // Gérer la suppression des formulaires
+    container.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox' && e.target.name.includes('DELETE')) {
+            const row = e.target.closest('.formset-row');
+            if (e.target.checked) {
+                row.classList.add('delete-row');
+            } else {
+                row.classList.remove('delete-row');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from .models import (
     CompanyProfile, Client, Vehicle, Service, InventoryItem,
     Invoice, InvoiceItem, Expense, FiscalYearArchive,
-    Supplier, RecurringExpense, Appointment
+    Supplier, RecurringExpense, Appointment, StockReceipt, StockReceiptItem
 )
 
 
@@ -416,6 +416,69 @@ class AppointmentAdmin(admin.ModelAdmin):
 
         self.message_user(request, f'{created_count} facture(s) créée(s) avec succès.')
     create_invoices_for_completed.short_description = "Créer des factures pour les rendez-vous terminés"
+
+
+class StockReceiptItemInline(admin.TabularInline):
+    model = StockReceiptItem
+    extra = 1
+    fields = ['inventory_item', 'quantity', 'purchase_price', 'total_price']
+    readonly_fields = ['total_price']
+
+
+@admin.register(StockReceipt)
+class StockReceiptAdmin(admin.ModelAdmin):
+    list_display = ['receipt_number', 'supplier', 'receipt_date', 'total_amount', 'status', 'has_expense']
+    list_filter = ['status', 'receipt_date', 'supplier', 'created_at']
+    search_fields = ['receipt_number', 'supplier__name', 'supplier_invoice_number']
+    readonly_fields = ['receipt_number', 'subtotal', 'total_amount', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('receipt_number', 'supplier', 'receipt_date', 'supplier_invoice_number', 'status')
+        }),
+        ('Montants', {
+            'fields': ('subtotal', 'gst_amount', 'qst_amount', 'total_amount')
+        }),
+        ('Dépense associée', {
+            'fields': ('expense',)
+        }),
+        ('Notes', {
+            'fields': ('notes',)
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    inlines = [StockReceiptItemInline]
+
+    def has_expense(self, obj):
+        """Afficher si le bon de réception a une dépense associée"""
+        if obj.expense:
+            return format_html('<span style="color: green;">Oui</span>')
+        return format_html('<span style="color: red;">Non</span>')
+    has_expense.short_description = 'Dépense créée'
+
+    actions = ['process_receipts']
+
+    def process_receipts(self, request, queryset):
+        """Action pour traiter les bons de réception"""
+        processed_count = 0
+        for receipt in queryset:
+            if receipt.status == 'received' and receipt.process_receipt():
+                processed_count += 1
+
+        self.message_user(request, f'{processed_count} bon(s) de réception traité(s) avec succès.')
+    process_receipts.short_description = "Traiter les bons de réception sélectionnés"
+
+
+@admin.register(StockReceiptItem)
+class StockReceiptItemAdmin(admin.ModelAdmin):
+    list_display = ['stock_receipt', 'inventory_item', 'quantity', 'purchase_price', 'total_price']
+    list_filter = ['stock_receipt__status', 'stock_receipt__receipt_date']
+    search_fields = ['stock_receipt__receipt_number', 'inventory_item__name']
+    readonly_fields = ['total_price', 'created_at', 'updated_at']
 
 
 # Personnalisation de l'interface d'administration

@@ -76,4 +76,15 @@ urlpatterns = [
     path('appointments/<int:appointment_id>/create-invoice/', views.appointment_create_invoice, name='appointment_create_invoice'),
     path('appointments/calendar/', views.appointment_calendar, name='appointment_calendar'),
     path('api/appointments/', views.appointment_calendar_api, name='appointment_calendar_api'),
+
+    # URLs pour l'inventaire
+    path('inventory/', views.inventory_list, name='inventory_list'),
+
+    # URLs pour les bons de réception
+    path('stock-receipts/', views.stock_receipt_list, name='stock_receipt_list'),
+    path('stock-receipts/create/', views.stock_receipt_create, name='stock_receipt_create'),
+    path('stock-receipts/<int:stock_receipt_id>/', views.stock_receipt_detail, name='stock_receipt_detail'),
+    path('stock-receipts/<int:stock_receipt_id>/edit/', views.stock_receipt_edit, name='stock_receipt_edit'),
+    path('stock-receipts/<int:stock_receipt_id>/delete/', views.stock_receipt_delete, name='stock_receipt_delete'),
+    path('stock-receipts/<int:stock_receipt_id>/process/', views.stock_receipt_process, name='stock_receipt_process'),
 ]

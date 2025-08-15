@@ -7,11 +7,12 @@ from django.http import HttpResponse, JsonResponse
 from datetime import date, timedelta
 from .models import (
     Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem,
-    Supplier, RecurringExpense, Appointment, InventoryItem
+    Supplier, RecurringExpense, Appointment, InventoryItem, StockReceipt, StockReceiptItem
 )
 from .forms import (
     CompanyProfileForm, ClientForm, VehicleForm, ServiceForm, InvoiceForm,
-    InvoiceItemFormSet, ExpenseForm, SupplierForm, RecurringExpenseForm, AppointmentForm
+    InvoiceItemFormSet, ExpenseForm, SupplierForm, RecurringExpenseForm, AppointmentForm,
+    StockReceiptForm, StockReceiptItemFormSet
 )
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -1566,3 +1567,211 @@ def appointment_calendar_api(request):
         })
 
     return JsonResponse(events, safe=False)
+
+
+# ==================== VUES POUR L'INVENTAIRE ====================
+
+@login_required
+def inventory_list(request):
+    """Vue pour lister les articles d'inventaire"""
+    search_query = request.GET.get('search', '')
+    category_filter = request.GET.get('category', '')
+    supplier_filter = request.GET.get('supplier', '')
+
+    inventory_items = InventoryItem.objects.all()
+
+    if search_query:
+        inventory_items = inventory_items.filter(
+            Q(name__icontains=search_query) |
+            Q(sku__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    if category_filter:
+        inventory_items = inventory_items.filter(category=category_filter)
+
+    if supplier_filter:
+        inventory_items = inventory_items.filter(supplier_id=supplier_filter)
+
+    inventory_items = inventory_items.order_by('name')
+
+    # Pagination
+    paginator = Paginator(inventory_items, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Données pour les filtres
+    categories = InventoryItem.CATEGORY_CHOICES
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'category_filter': category_filter,
+        'supplier_filter': supplier_filter,
+        'categories': categories,
+        'suppliers': suppliers,
+    }
+
+    return render(request, 'garage_app/inventory/inventory_list.html', context)
+
+
+# ==================== VUES POUR LES BONS DE RÉCEPTION ====================
+
+@login_required
+def stock_receipt_list(request):
+    """Vue pour lister les bons de réception"""
+    search_query = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+    supplier_filter = request.GET.get('supplier', '')
+
+    stock_receipts = StockReceipt.objects.all()
+
+    if search_query:
+        stock_receipts = stock_receipts.filter(
+            Q(receipt_number__icontains=search_query) |
+            Q(supplier__name__icontains=search_query) |
+            Q(supplier_invoice_number__icontains=search_query)
+        )
+
+    if status_filter:
+        stock_receipts = stock_receipts.filter(status=status_filter)
+
+    if supplier_filter:
+        stock_receipts = stock_receipts.filter(supplier_id=supplier_filter)
+
+    stock_receipts = stock_receipts.order_by('-receipt_date', '-created_at')
+
+    # Pagination
+    paginator = Paginator(stock_receipts, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Données pour les filtres
+    suppliers = Supplier.objects.filter(is_active=True).order_by('name')
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'supplier_filter': supplier_filter,
+        'suppliers': suppliers,
+        'status_choices': StockReceipt.STATUS_CHOICES,
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_list.html', context)
+
+
+@login_required
+def stock_receipt_detail(request, stock_receipt_id):
+    """Vue pour afficher les détails d'un bon de réception"""
+    stock_receipt = get_object_or_404(StockReceipt, id=stock_receipt_id)
+
+    context = {
+        'stock_receipt': stock_receipt,
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_detail.html', context)
+
+
+@login_required
+def stock_receipt_create(request):
+    """Vue pour créer un nouveau bon de réception"""
+    if request.method == 'POST':
+        form = StockReceiptForm(request.POST)
+        formset = StockReceiptItemFormSet(request.POST)
+
+        if form.is_valid() and formset.is_valid():
+            stock_receipt = form.save()
+            formset.instance = stock_receipt
+            formset.save()
+
+            # Calculer les totaux
+            stock_receipt.calculate_totals()
+
+            messages.success(request, f'Bon de réception {stock_receipt.receipt_number} créé avec succès.')
+            return redirect('garage_app:stock_receipt_detail', stock_receipt_id=stock_receipt.id)
+    else:
+        form = StockReceiptForm()
+        formset = StockReceiptItemFormSet()
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'title': 'Nouveau bon de réception',
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_form.html', context)
+
+
+@login_required
+def stock_receipt_edit(request, stock_receipt_id):
+    """Vue pour modifier un bon de réception"""
+    stock_receipt = get_object_or_404(StockReceipt, id=stock_receipt_id)
+
+    if request.method == 'POST':
+        form = StockReceiptForm(request.POST, instance=stock_receipt)
+        formset = StockReceiptItemFormSet(request.POST, instance=stock_receipt)
+
+        if form.is_valid() and formset.is_valid():
+            stock_receipt = form.save()
+            formset.save()
+
+            # Calculer les totaux
+            stock_receipt.calculate_totals()
+
+            messages.success(request, f'Bon de réception {stock_receipt.receipt_number} modifié avec succès.')
+            return redirect('garage_app:stock_receipt_detail', stock_receipt_id=stock_receipt.id)
+    else:
+        form = StockReceiptForm(instance=stock_receipt)
+        formset = StockReceiptItemFormSet(instance=stock_receipt)
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'stock_receipt': stock_receipt,
+        'title': f'Modifier {stock_receipt.receipt_number}',
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_form.html', context)
+
+
+@login_required
+def stock_receipt_delete(request, stock_receipt_id):
+    """Vue pour supprimer un bon de réception"""
+    stock_receipt = get_object_or_404(StockReceipt, id=stock_receipt_id)
+
+    if request.method == 'POST':
+        receipt_number = stock_receipt.receipt_number
+        stock_receipt.delete()
+        messages.success(request, f'Bon de réception {receipt_number} supprimé avec succès.')
+        return redirect('garage_app:stock_receipt_list')
+
+    context = {
+        'stock_receipt': stock_receipt,
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_confirm_delete.html', context)
+
+
+@login_required
+def stock_receipt_process(request, stock_receipt_id):
+    """Vue pour traiter un bon de réception (mettre à jour l'inventaire et créer la dépense)"""
+    stock_receipt = get_object_or_404(StockReceipt, id=stock_receipt_id)
+
+    if request.method == 'POST':
+        if stock_receipt.status == 'received':
+            if stock_receipt.process_receipt():
+                messages.success(request, f'Bon de réception {stock_receipt.receipt_number} traité avec succès. Inventaire mis à jour et dépense créée.')
+            else:
+                messages.error(request, 'Erreur lors du traitement du bon de réception.')
+        else:
+            messages.error(request, 'Seuls les bons de réception avec le statut "Reçu" peuvent être traités.')
+
+        return redirect('garage_app:stock_receipt_detail', stock_receipt_id=stock_receipt.id)
+
+    context = {
+        'stock_receipt': stock_receipt,
+    }
+
+    return render(request, 'garage_app/stock_receipts/stock_receipt_process.html', context)

@@ -2,7 +2,7 @@ from django import forms
 from django.forms import inlineformset_factory
 from .models import (
     CompanyProfile, Client, Vehicle, Service, Invoice, InvoiceItem, Expense,
-    Supplier, RecurringExpense, Appointment, InventoryItem
+    Supplier, RecurringExpense, Appointment, InventoryItem, StockReceipt, StockReceiptItem
 )
 from datetime import date, timedelta, datetime
 
@@ -394,6 +394,53 @@ class AppointmentForm(forms.ModelForm):
             self.fields['end_datetime'].initial = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
 
+class StockReceiptForm(forms.ModelForm):
+    """Formulaire pour les bons de réception"""
+
+    class Meta:
+        model = StockReceipt
+        fields = [
+            'supplier', 'receipt_date', 'supplier_invoice_number', 'status',
+            'gst_amount', 'qst_amount', 'notes'
+        ]
+        widgets = {
+            'supplier': forms.Select(attrs={'class': 'form-select'}),
+            'receipt_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'supplier_invoice_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Numéro de facture fournisseur'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
+            'gst_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
+            'qst_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes additionnelles'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrer les fournisseurs actifs
+        self.fields['supplier'].queryset = Supplier.objects.filter(is_active=True)
+
+        # Définir la date par défaut
+        if not self.instance.pk:
+            self.fields['receipt_date'].initial = date.today()
+
+
+class StockReceiptItemForm(forms.ModelForm):
+    """Formulaire pour les éléments de bon de réception"""
+
+    class Meta:
+        model = StockReceiptItem
+        fields = ['inventory_item', 'quantity', 'purchase_price']
+        widgets = {
+            'inventory_item': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+            'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrer les articles d'inventaire actifs
+        self.fields['inventory_item'].queryset = InventoryItem.objects.filter(is_active=True)
+
+
 # Formset pour les éléments de facture
 InvoiceItemFormSet = inlineformset_factory(
     Invoice,
@@ -402,4 +449,14 @@ InvoiceItemFormSet = inlineformset_factory(
     extra=1,
     can_delete=True,
     fields=['item_type', 'service', 'inventory_item', 'description', 'quantity', 'unit_price']
+)
+
+# Formset pour les éléments de bon de réception
+StockReceiptItemFormSet = inlineformset_factory(
+    StockReceipt,
+    StockReceiptItem,
+    form=StockReceiptItemForm,
+    extra=1,
+    can_delete=True,
+    fields=['inventory_item', 'quantity', 'purchase_price']
 )
