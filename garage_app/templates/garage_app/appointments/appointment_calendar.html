@@ -43,6 +43,7 @@
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         min-height: 600px;
+        background-color: white;
     }
     .calendar-day {
         border-right: 1px solid #dee2e6;
@@ -225,7 +226,9 @@
                 <div class="calendar-weekday">Samedi</div>
             </div>
             <div class="calendar-days" id="calendar-days">
-                <!-- Les jours seront générés par JavaScript -->
+                <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #666;">
+                    Chargement du calendrier...
+                </div>
             </div>
         </div>
     </div>
@@ -251,14 +254,15 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('JavaScript du calendrier chargé');
     let currentDate = new Date();
     let appointments = {};
 
-    // Charger les rendez-vous du mois
-    loadMonthAppointments();
-
-    // Générer le calendrier initial
+    // Générer le calendrier initial immédiatement
     generateCalendar();
+
+    // Puis charger les rendez-vous du mois
+    loadMonthAppointments();
 
     // Fonction pour convertir les couleurs en statuts
     function getStatusFromColor(color) {
@@ -274,53 +278,67 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function generateCalendar() {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
+        try {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
 
-        // Mettre à jour le titre
-        const monthNames = [
-            'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-        ];
-        document.getElementById('current-month-year').textContent =
-            `${monthNames[month]} ${year}`;
+            // Mettre à jour le titre
+            const monthNames = [
+                'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+                'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+            ];
 
-        // Calculer le premier jour du mois et le nombre de jours
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const daysInMonth = lastDay.getDate();
-        const startingDayOfWeek = firstDay.getDay();
+            const titleEl = document.getElementById('current-month-year');
+            if (titleEl) {
+                titleEl.textContent = `${monthNames[month]} ${year}`;
+            }
 
-        // Calculer les jours du mois précédent à afficher
-        const prevMonth = new Date(year, month - 1, 0);
-        const daysInPrevMonth = prevMonth.getDate();
+            // Calculer le premier jour du mois et le nombre de jours
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
 
-        const calendarDays = document.getElementById('calendar-days');
-        calendarDays.innerHTML = '';
+            // Calculer les jours du mois précédent à afficher
+            const prevMonth = new Date(year, month - 1, 0);
+            const daysInPrevMonth = prevMonth.getDate();
 
-        // Ajouter les jours du mois précédent
-        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
-            const dayNum = daysInPrevMonth - i;
-            const dayEl = createDayElement(dayNum, true, year, month - 1);
-            calendarDays.appendChild(dayEl);
-        }
+            const calendarDays = document.getElementById('calendar-days');
+            if (!calendarDays) {
+                console.error('Element calendar-days non trouvé');
+                return;
+            }
 
-        // Ajouter les jours du mois actuel
-        const today = new Date();
-        for (let day = 1; day <= daysInMonth; day++) {
-            const isToday = (year === today.getFullYear() &&
-                           month === today.getMonth() &&
-                           day === today.getDate());
-            const dayEl = createDayElement(day, false, year, month, isToday);
-            calendarDays.appendChild(dayEl);
-        }
+            calendarDays.innerHTML = '';
 
-        // Ajouter les jours du mois suivant pour compléter la grille
-        const totalCells = calendarDays.children.length;
-        const remainingCells = 42 - totalCells; // 6 semaines × 7 jours
-        for (let day = 1; day <= remainingCells; day++) {
-            const dayEl = createDayElement(day, true, year, month + 1);
-            calendarDays.appendChild(dayEl);
+            // Ajouter les jours du mois précédent
+            for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+                const dayNum = daysInPrevMonth - i;
+                const dayEl = createDayElement(dayNum, true, year, month - 1);
+                calendarDays.appendChild(dayEl);
+            }
+
+            // Ajouter les jours du mois actuel
+            const today = new Date();
+            for (let day = 1; day <= daysInMonth; day++) {
+                const isToday = (year === today.getFullYear() &&
+                               month === today.getMonth() &&
+                               day === today.getDate());
+                const dayEl = createDayElement(day, false, year, month, isToday);
+                calendarDays.appendChild(dayEl);
+            }
+
+            // Ajouter les jours du mois suivant pour compléter la grille
+            const totalCells = calendarDays.children.length;
+            const remainingCells = 42 - totalCells; // 6 semaines × 7 jours
+            for (let day = 1; day <= remainingCells; day++) {
+                const dayEl = createDayElement(day, true, year, month + 1);
+                calendarDays.appendChild(dayEl);
+            }
+
+            console.log('Calendrier généré avec succès');
+        } catch (error) {
+            console.error('Erreur lors de la génération du calendrier:', error);
         }
     }
 
@@ -399,46 +417,59 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadMonthAppointments() {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        const startDate = new Date(year, month, 1);
-        const endDate = new Date(year, month + 1, 0);
 
         // Charger les rendez-vous via l'API existante
         fetch('{% url "garage_app:appointment_calendar_api" %}')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('Données reçues:', data); // Debug
                 appointments = {};
-                data.forEach(event => {
-                    const eventDate = new Date(event.start);
-                    const dateStr = eventDate.toISOString().split('T')[0];
 
-                    if (!appointments[dateStr]) {
-                        appointments[dateStr] = [];
-                    }
+                if (Array.isArray(data)) {
+                    data.forEach(event => {
+                        try {
+                            const eventDate = new Date(event.start);
+                            const dateStr = eventDate.toISOString().split('T')[0];
 
-                    // Extraire le titre et le client du titre complet
-                    const titleParts = event.title.split(' - ');
-                    const appointmentTitle = titleParts[0] || event.title;
-                    const clientName = titleParts[1] || event.extendedProps.client || '';
+                            if (!appointments[dateStr]) {
+                                appointments[dateStr] = [];
+                            }
 
-                    appointments[dateStr].push({
-                        id: event.id,
-                        title: appointmentTitle,
-                        client: clientName,
-                        vehicle: event.extendedProps.vehicle,
-                        start_time: eventDate.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
-                        end_time: new Date(event.end).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
-                        status: getStatusFromColor(event.backgroundColor),
-                        status_display: event.extendedProps.status,
-                        estimated_price: event.extendedProps.estimated_price,
-                        description: event.extendedProps.description
+                            // Extraire le titre et le client du titre complet
+                            const titleParts = event.title.split(' - ');
+                            const appointmentTitle = titleParts[0] || event.title;
+                            const clientName = titleParts[1] || event.extendedProps.client || '';
+
+                            appointments[dateStr].push({
+                                id: event.id,
+                                title: appointmentTitle,
+                                client: clientName,
+                                vehicle: event.extendedProps.vehicle || '',
+                                start_time: eventDate.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
+                                end_time: new Date(event.end).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
+                                status: getStatusFromColor(event.backgroundColor),
+                                status_display: event.extendedProps.status || 'Planifié',
+                                estimated_price: event.extendedProps.estimated_price || '',
+                                description: event.extendedProps.description || ''
+                            });
+                        } catch (eventError) {
+                            console.error('Erreur lors du traitement d\'un événement:', eventError, event);
+                        }
                     });
-                });
+                }
 
                 // Régénérer le calendrier avec les données
                 generateCalendar();
             })
             .catch(error => {
                 console.error('Erreur lors du chargement des rendez-vous:', error);
+                // Générer le calendrier même en cas d'erreur
+                generateCalendar();
             });
     }
 
