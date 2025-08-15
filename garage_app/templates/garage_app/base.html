@@ -287,31 +287,11 @@
                         </a></li>
                     </ul>
                 </li>
-                <!-- Menu Dépenses réorganisé -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle {% if 'expense' in request.resolver_match.url_name or 'recurring' in request.resolver_match.url_name %}active{% endif %}" href="#" id="expensesDropdown" role="button" data-bs-toggle="dropdown">
+                <!-- Menu Dépenses - lien direct -->
+                <li class="nav-item">
+                    <a class="nav-link {% if 'expense' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:expense_list' %}">
                         <i class="fas fa-receipt me-2"></i>Dépenses
                     </a>
-                    <ul class="dropdown-menu">
-                        <li><h6 class="dropdown-header">Dépenses courantes</h6></li>
-                        <li><a class="dropdown-item" href="{% url 'garage_app:expense_list' %}">
-                            <i class="fas fa-list me-2"></i>Liste des dépenses
-                        </a></li>
-                        <li><a class="dropdown-item" href="{% url 'garage_app:expense_create' %}">
-                            <i class="fas fa-plus me-2"></i>Nouvelle dépense
-                        </a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><h6 class="dropdown-header">Dépenses récurrentes</h6></li>
-                        <li><a class="dropdown-item" href="{% url 'garage_app:recurring_expense_list' %}">
-                            <i class="fas fa-sync-alt me-2"></i>Liste des dépenses récurrentes
-                        </a></li>
-                        <li><a class="dropdown-item" href="{% url 'garage_app:recurring_expense_create' %}">
-                            <i class="fas fa-plus me-2"></i>Nouvelle dépense récurrente
-                        </a></li>
-                        <li><a class="dropdown-item" href="{% url 'garage_app:create_due_recurring_expenses' %}">
-                            <i class="fas fa-play me-2"></i>Créer les dépenses dues
-                        </a></li>
-                    </ul>
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if 'appointment' in request.resolver_match.url_name %}active{% endif %}" href="#" id="appointmentsDropdown" role="button" data-bs-toggle="dropdown">

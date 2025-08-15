@@ -246,24 +246,6 @@
     </div>
 </div>
 
-<!-- Modal pour afficher les détails du rendez-vous -->
-<div class="modal fade" id="appointmentModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="appointmentModalTitle">Détails du rendez-vous</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="appointmentModalBody">
-                <!-- Contenu dynamique -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-                <a href="#" id="appointmentEditBtn" class="btn btn-primary">Modifier</a>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -277,6 +259,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Générer le calendrier initial
     generateCalendar();
+
+    // Fonction pour convertir les couleurs en statuts
+    function getStatusFromColor(color) {
+        const colorMap = {
+            '#6c757d': 'scheduled',
+            '#0d6efd': 'confirmed',
+            '#fd7e14': 'in_progress',
+            '#198754': 'completed',
+            '#dc3545': 'cancelled',
+            '#6f42c1': 'no_show'
+        };
+        return colorMap[color] || 'scheduled';
+    }
 
     function generateCalendar() {
         const year = currentDate.getFullYear();
@@ -420,15 +415,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         appointments[dateStr] = [];
                     }
 
+                    // Extraire le titre et le client du titre complet
+                    const titleParts = event.title.split(' - ');
+                    const appointmentTitle = titleParts[0] || event.title;
+                    const clientName = titleParts[1] || event.extendedProps.client || '';
+
                     appointments[dateStr].push({
                         id: event.id,
-                        title: event.title,
-                        client: event.extendedProps.client,
+                        title: appointmentTitle,
+                        client: clientName,
                         vehicle: event.extendedProps.vehicle,
                         start_time: eventDate.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
                         end_time: new Date(event.end).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
-                        status: event.extendedProps.status,
-                        status_display: event.extendedProps.status_display,
+                        status: getStatusFromColor(event.backgroundColor),
+                        status_display: event.extendedProps.status,
                         estimated_price: event.extendedProps.estimated_price,
                         description: event.extendedProps.description
                     });
