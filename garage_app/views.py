@@ -1601,7 +1601,7 @@ def inventory_list(request):
     page_obj = paginator.get_page(page_number)
 
     # Données pour les filtres
-    categories = InventoryItem.CATEGORY_CHOICES
+    categories = InventoryItem.INVENTORY_CATEGORY_CHOICES
     suppliers = Supplier.objects.filter(is_active=True).order_by('name')
 
     context = {
