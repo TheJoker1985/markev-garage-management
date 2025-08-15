@@ -154,3 +154,5 @@ static/
 # Local development
 *.sqlite3
 *.db
+
+.vercel

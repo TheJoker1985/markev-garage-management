@@ -87,18 +87,21 @@ WSGI_APPLICATION = 'markev_project.wsgi.application'
 #     }
 # }
 
-# Configuration temporaire pour SQLite (développement)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# Configuration pour production avec PostgreSQL sur Vercel
+# Configuration de base de données
 if os.environ.get('DATABASE_URL'):
+    # Production avec PostgreSQL
     import dj_database_url
-    DATABASES['default'] = dj_database_url.parse(os.environ.get('DATABASE_URL'))
+    DATABASES = {
+        'default': dj_database_url.parse(os.environ.get('DATABASE_URL'))
+    }
+else:
+    # Développement avec SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation

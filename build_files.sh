@@ -4,10 +4,10 @@
 echo "Building project..."
 
 # Install dependencies
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 # Collect static files
-python manage.py collectstatic --noinput --clear
+python3 manage.py collectstatic --noinput --clear
 
 # Create staticfiles_build directory for Vercel
 mkdir -p staticfiles_build
