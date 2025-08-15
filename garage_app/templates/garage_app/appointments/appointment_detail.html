@@ -1,0 +1,145 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ appointment.title }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ appointment.title }}</h1>
+            <div>
+                {% if appointment.can_create_invoice %}
+                    <a href="{% url 'garage_app:appointment_create_invoice' appointment.id %}" class="btn btn-success">
+                        <i class="fas fa-file-invoice me-2"></i>Créer facture
+                    </a>
+                {% endif %}
+                <a href="{% url 'garage_app:appointment_edit' appointment.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Modifier
+                </a>
+                <a href="{% url 'garage_app:appointment_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informations du rendez-vous -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations du rendez-vous</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Titre:</strong> {{ appointment.title }}</p>
+                {% if appointment.description %}
+                    <p><strong>Description:</strong> {{ appointment.description }}</p>
+                {% endif %}
+                <p><strong>Client:</strong> 
+                    <a href="{% url 'garage_app:client_detail' appointment.client.id %}">{{ appointment.client.full_name }}</a>
+                </p>
+                <p><strong>Véhicule:</strong> 
+                    {% if appointment.vehicle %}
+                        {{ appointment.vehicle.year }} {{ appointment.vehicle.make }} {{ appointment.vehicle.model }}
+                    {% else %}
+                        <span class="text-muted">Non spécifié</span>
+                    {% endif %}
+                </p>
+                <p><strong>Statut:</strong> 
+                    {% if appointment.status == 'scheduled' %}
+                        <span class="badge bg-primary">{{ appointment.get_status_display }}</span>
+                    {% elif appointment.status == 'confirmed' %}
+                        <span class="badge bg-success">{{ appointment.get_status_display }}</span>
+                    {% elif appointment.status == 'completed' %}
+                        <span class="badge bg-info">{{ appointment.get_status_display }}</span>
+                    {% elif appointment.status == 'cancelled' %}
+                        <span class="badge bg-danger">{{ appointment.get_status_display }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ appointment.get_status_display }}</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informations de planification -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Planification</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Date et heure de début:</strong> {{ appointment.start_datetime|date:"d/m/Y H:i" }}</p>
+                <p><strong>Date et heure de fin:</strong> {{ appointment.end_datetime|date:"d/m/Y H:i" }}</p>
+                <p><strong>Durée:</strong> {{ appointment.duration_minutes }} minutes</p>
+                {% if appointment.estimated_price %}
+                    <p><strong>Prix estimé:</strong> ${{ appointment.estimated_price|floatformat:2 }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Services estimés -->
+{% if appointment.estimated_services.exists %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Services estimés</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for service in appointment.estimated_services.all %}
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                            <div>
+                                <strong>{{ service.name }}</strong>
+                                {% if service.description %}
+                                    <br><small class="text-muted">{{ service.description|truncatechars:50 }}</small>
+                                {% endif %}
+                            </div>
+                            <span class="badge bg-primary">${{ service.default_price|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Notes -->
+{% if appointment.notes %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Notes</h5>
+            </div>
+            <div class="card-body">
+                <p>{{ appointment.notes|linebreaks }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Facture liée -->
+{% if appointment.invoice %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="fas fa-file-invoice me-2"></i>
+            <strong>Facture créée:</strong> 
+            <a href="{% url 'garage_app:invoice_detail' appointment.invoice.id %}">
+                Facture #{{ appointment.invoice.invoice_number }}
+            </a>
+            ({{ appointment.invoice.get_status_display }})
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

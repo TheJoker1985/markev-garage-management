@@ -87,11 +87,11 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="{{ form.duration_minutes.id_for_label }}" class="form-label">{{ form.duration_minutes.label }}</label>
-                                {{ form.duration_minutes }}
-                                {% if form.duration_minutes.errors %}
+                                <label for="{{ form.end_datetime.id_for_label }}" class="form-label">{{ form.end_datetime.label }}</label>
+                                {{ form.end_datetime }}
+                                {% if form.end_datetime.errors %}
                                     <div class="text-danger">
-                                        {% for error in form.duration_minutes.errors %}
+                                        {% for error in form.end_datetime.errors %}
                                             <small>{{ error }}</small>
                                         {% endfor %}
                                     </div>

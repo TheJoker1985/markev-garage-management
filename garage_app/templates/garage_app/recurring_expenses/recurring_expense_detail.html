@@ -1,0 +1,155 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ recurring_expense.name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>{{ recurring_expense.name }}</h1>
+            <div>
+                <a href="{% url 'garage_app:recurring_expense_edit' recurring_expense.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Modifier
+                </a>
+                <a href="{% url 'garage_app:recurring_expense_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour à la liste
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informations de la dépense récurrente -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations générales</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Nom:</strong> {{ recurring_expense.name }}</p>
+                {% if recurring_expense.description %}
+                    <p><strong>Description:</strong> {{ recurring_expense.description }}</p>
+                {% endif %}
+                <p><strong>Fournisseur:</strong> 
+                    {% if recurring_expense.supplier %}
+                        <a href="{% url 'garage_app:supplier_detail' recurring_expense.supplier.id %}">{{ recurring_expense.supplier.name }}</a>
+                    {% else %}
+                        <span class="text-muted">Non spécifié</span>
+                    {% endif %}
+                </p>
+                <p><strong>Catégorie:</strong> 
+                    <span class="badge bg-secondary">{{ recurring_expense.get_category_display }}</span>
+                </p>
+                <p><strong>Statut:</strong> 
+                    {% if recurring_expense.is_active %}
+                        <span class="badge bg-success">Active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Informations financières -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations financières</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Montant:</strong> ${{ recurring_expense.amount|floatformat:2 }}</p>
+                {% if recurring_expense.gst_amount %}
+                    <p><strong>TPS:</strong> ${{ recurring_expense.gst_amount|floatformat:2 }}</p>
+                {% endif %}
+                {% if recurring_expense.qst_amount %}
+                    <p><strong>TVQ:</strong> ${{ recurring_expense.qst_amount|floatformat:2 }}</p>
+                {% endif %}
+                <p><strong>Total avec taxes:</strong> ${{ recurring_expense.total_with_taxes|floatformat:2 }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Informations de récurrence -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Récurrence</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Fréquence:</strong> 
+                    <span class="badge bg-info">{{ recurring_expense.get_frequency_display }}</span>
+                </p>
+                <p><strong>Date de début:</strong> {{ recurring_expense.start_date|date:"d/m/Y" }}</p>
+                {% if recurring_expense.end_date %}
+                    <p><strong>Date de fin:</strong> {{ recurring_expense.end_date|date:"d/m/Y" }}</p>
+                {% endif %}
+                <p><strong>Prochaine échéance:</strong> 
+                    {{ recurring_expense.next_due_date|date:"d/m/Y" }}
+                    {% if recurring_expense.is_due %}
+                        <span class="badge bg-warning ms-1">Due</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes -->
+    {% if recurring_expense.notes %}
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Notes</h5>
+            </div>
+            <div class="card-body">
+                <p>{{ recurring_expense.notes|linebreaks }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Historique des dépenses créées -->
+{% if related_expenses %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Historique des dépenses créées</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Montant</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in related_expenses %}
+                            <tr>
+                                <td>{{ expense.expense_date|date:"d/m/Y" }}</td>
+                                <td>{{ expense.description }}</td>
+                                <td>${{ expense.amount|floatformat:2 }}</td>
+                                <td>
+                                    <a href="{% url 'garage_app:expense_detail' expense.id %}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
