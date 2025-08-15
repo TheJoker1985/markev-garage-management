@@ -4,17 +4,154 @@
 {% block title %}Calendrier des rendez-vous - MarKev{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
 <style>
-    .fc-event {
+    .calendar-grid {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .calendar-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 15px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.2em;
+    }
+    .calendar-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        background-color: #e9ecef;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .calendar-weekday {
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        border-right: 1px solid #dee2e6;
+    }
+    .calendar-weekday:last-child {
+        border-right: none;
+    }
+    .calendar-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        min-height: 600px;
+    }
+    .calendar-day {
+        border-right: 1px solid #dee2e6;
+        border-bottom: 1px solid #dee2e6;
+        min-height: 120px;
+        padding: 8px;
+        position: relative;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .calendar-day:hover {
+        background-color: #f8f9fa;
+    }
+    .calendar-day:nth-child(7n) {
+        border-right: none;
+    }
+    .calendar-day.other-month {
+        background-color: #f8f9fa;
+        color: #6c757d;
+    }
+    .calendar-day.today {
+        background-color: #e3f2fd;
+        border: 2px solid #2196f3;
+    }
+    .calendar-day.selected {
+        background-color: #fff3cd;
+        border: 2px solid #ffc107;
+    }
+    .day-number {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .day-appointments {
+        font-size: 0.8em;
+    }
+    .appointment-mini {
+        background-color: #007bff;
+        color: white;
+        padding: 2px 4px;
+        margin: 1px 0;
+        border-radius: 3px;
+        font-size: 0.7em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         cursor: pointer;
     }
-    .fc-event:hover {
-        opacity: 0.8;
+    .appointment-mini.status-scheduled {
+        background-color: #6c757d;
     }
-    #calendar {
-        max-width: 100%;
-        margin: 0 auto;
+    .appointment-mini.status-confirmed {
+        background-color: #0d6efd;
+    }
+    .appointment-mini.status-in_progress {
+        background-color: #fd7e14;
+    }
+    .appointment-mini.status-completed {
+        background-color: #198754;
+    }
+    .appointment-mini.status-cancelled {
+        background-color: #dc3545;
+    }
+    .appointment-mini.status-no_show {
+        background-color: #6f42c1;
+    }
+    .appointment-count {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background-color: #dc3545;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 0.7em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    .appointment-sidebar {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    .appointment-item {
+        border-left: 4px solid #007bff;
+        margin-bottom: 10px;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 0 5px 5px 0;
+        cursor: pointer;
+    }
+    .appointment-item:hover {
+        background-color: #e9ecef;
+    }
+    .appointment-item.status-confirmed {
+        border-left-color: #0d6efd;
+    }
+    .appointment-item.status-completed {
+        border-left-color: #198754;
+    }
+    .appointment-item.status-cancelled {
+        border-left-color: #dc3545;
+    }
+    .appointment-item.status-in_progress {
+        border-left-color: #fd7e14;
+    }
+    .appointment-item.status-no_show {
+        border-left-color: #6f42c1;
     }
 </style>
 {% endblock %}
@@ -60,11 +197,50 @@
                 </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Calendrier -->
+<div class="row">
+    <div class="col-lg-9">
+        <!-- Navigation du calendrier -->
+        <div class="calendar-nav">
+            <button class="btn btn-outline-primary" onclick="changeMonth(-1)">
+                <i class="fas fa-chevron-left"></i> Mois précédent
+            </button>
+            <h4 id="current-month-year"></h4>
+            <button class="btn btn-outline-primary" onclick="changeMonth(1)">
+                Mois suivant <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Grille du calendrier -->
+        <div class="calendar-grid">
+            <div class="calendar-weekdays">
+                <div class="calendar-weekday">Dimanche</div>
+                <div class="calendar-weekday">Lundi</div>
+                <div class="calendar-weekday">Mardi</div>
+                <div class="calendar-weekday">Mercredi</div>
+                <div class="calendar-weekday">Jeudi</div>
+                <div class="calendar-weekday">Vendredi</div>
+                <div class="calendar-weekday">Samedi</div>
+            </div>
+            <div class="calendar-days" id="calendar-days">
+                <!-- Les jours seront générés par JavaScript -->
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3">
         <div class="card">
-            <div class="card-body">
-                <div id="calendar"></div>
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-day me-2"></i>
+                    <span id="selected-date">Sélectionnez une date</span>
+                </h5>
+            </div>
+            <div class="card-body appointment-sidebar">
+                <div id="appointments-list">
+                    <p class="text-muted text-center">Cliquez sur une date pour voir les rendez-vous</p>
+                </div>
             </div>
         </div>
     </div>
@@ -91,84 +267,236 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var calendarEl = document.getElementById('calendar');
-    var calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        locale: 'fr',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-        },
-        buttonText: {
-            today: 'Aujourd\'hui',
-            month: 'Mois',
-            week: 'Semaine',
-            day: 'Jour'
-        },
-        events: '{% url "garage_app:appointment_calendar_api" %}',
-        eventClick: function(info) {
-            // Afficher les détails dans le modal
-            var event = info.event;
-            var props = event.extendedProps;
-            
-            document.getElementById('appointmentModalTitle').textContent = event.title;
-            
-            var modalBody = document.getElementById('appointmentModalBody');
-            modalBody.innerHTML = `
-                <div class="row">
-                    <div class="col-sm-4"><strong>Client:</strong></div>
-                    <div class="col-sm-8">${props.client}</div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4"><strong>Véhicule:</strong></div>
-                    <div class="col-sm-8">${props.vehicle || 'Non spécifié'}</div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4"><strong>Statut:</strong></div>
-                    <div class="col-sm-8">${props.status}</div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4"><strong>Début:</strong></div>
-                    <div class="col-sm-8">${event.start.toLocaleString('fr-FR')}</div>
-                </div>
-                <div class="row">
-                    <div class="col-sm-4"><strong>Fin:</strong></div>
-                    <div class="col-sm-8">${event.end.toLocaleString('fr-FR')}</div>
-                </div>
-                ${props.description ? `
-                <div class="row">
-                    <div class="col-sm-4"><strong>Description:</strong></div>
-                    <div class="col-sm-8">${props.description}</div>
-                </div>
-                ` : ''}
-                ${props.estimated_price ? `
-                <div class="row">
-                    <div class="col-sm-4"><strong>Prix estimé:</strong></div>
-                    <div class="col-sm-8">${props.estimated_price} $</div>
-                </div>
-                ` : ''}
-            `;
-            
-            // Lien pour modifier
-            document.getElementById('appointmentEditBtn').href = 
-                `/appointments/${event.id}/edit/`;
-            
-            // Afficher le modal
-            var modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
-            modal.show();
-        },
-        eventDidMount: function(info) {
-            // Ajouter un tooltip
-            info.el.setAttribute('title', 
-                `${info.event.title}\n${info.event.extendedProps.status}`);
+    let currentDate = new Date();
+    let appointments = {};
+
+    // Charger les rendez-vous du mois
+    loadMonthAppointments();
+
+    // Générer le calendrier initial
+    generateCalendar();
+
+    function generateCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+
+        // Mettre à jour le titre
+        const monthNames = [
+            'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+            'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+        ];
+        document.getElementById('current-month-year').textContent =
+            `${monthNames[month]} ${year}`;
+
+        // Calculer le premier jour du mois et le nombre de jours
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        // Calculer les jours du mois précédent à afficher
+        const prevMonth = new Date(year, month - 1, 0);
+        const daysInPrevMonth = prevMonth.getDate();
+
+        const calendarDays = document.getElementById('calendar-days');
+        calendarDays.innerHTML = '';
+
+        // Ajouter les jours du mois précédent
+        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+            const dayNum = daysInPrevMonth - i;
+            const dayEl = createDayElement(dayNum, true, year, month - 1);
+            calendarDays.appendChild(dayEl);
         }
-    });
-    
-    calendar.render();
+
+        // Ajouter les jours du mois actuel
+        const today = new Date();
+        for (let day = 1; day <= daysInMonth; day++) {
+            const isToday = (year === today.getFullYear() &&
+                           month === today.getMonth() &&
+                           day === today.getDate());
+            const dayEl = createDayElement(day, false, year, month, isToday);
+            calendarDays.appendChild(dayEl);
+        }
+
+        // Ajouter les jours du mois suivant pour compléter la grille
+        const totalCells = calendarDays.children.length;
+        const remainingCells = 42 - totalCells; // 6 semaines × 7 jours
+        for (let day = 1; day <= remainingCells; day++) {
+            const dayEl = createDayElement(day, true, year, month + 1);
+            calendarDays.appendChild(dayEl);
+        }
+    }
+
+    function createDayElement(dayNum, isOtherMonth, year, month, isToday = false) {
+        const dayEl = document.createElement('div');
+        dayEl.className = 'calendar-day';
+
+        if (isOtherMonth) {
+            dayEl.classList.add('other-month');
+        }
+        if (isToday) {
+            dayEl.classList.add('today');
+        }
+
+        // Date pour cette cellule
+        const cellDate = new Date(year, month, dayNum);
+        const dateStr = cellDate.toISOString().split('T')[0];
+
+        // Numéro du jour
+        const dayNumberEl = document.createElement('div');
+        dayNumberEl.className = 'day-number';
+        dayNumberEl.textContent = dayNum;
+        dayEl.appendChild(dayNumberEl);
+
+        // Container pour les rendez-vous
+        const appointmentsEl = document.createElement('div');
+        appointmentsEl.className = 'day-appointments';
+        dayEl.appendChild(appointmentsEl);
+
+        // Ajouter les rendez-vous de ce jour
+        if (appointments[dateStr]) {
+            const dayAppointments = appointments[dateStr];
+
+            // Afficher jusqu'à 3 rendez-vous
+            const maxVisible = 3;
+            for (let i = 0; i < Math.min(dayAppointments.length, maxVisible); i++) {
+                const apt = dayAppointments[i];
+                const aptEl = document.createElement('div');
+                aptEl.className = `appointment-mini status-${apt.status}`;
+                aptEl.textContent = `${apt.start_time} ${apt.title}`;
+                aptEl.title = `${apt.title} - ${apt.client}`;
+                aptEl.onclick = () => window.location.href = `/appointments/${apt.id}/`;
+                appointmentsEl.appendChild(aptEl);
+            }
+
+            // Afficher le nombre total si plus de 3
+            if (dayAppointments.length > maxVisible) {
+                const countEl = document.createElement('div');
+                countEl.className = 'appointment-count';
+                countEl.textContent = dayAppointments.length;
+                dayEl.appendChild(countEl);
+            }
+        }
+
+        // Gestionnaire de clic pour sélectionner la date
+        dayEl.onclick = function(e) {
+            if (e.target.classList.contains('appointment-mini')) {
+                return; // Ne pas traiter le clic si c'est sur un rendez-vous
+            }
+
+            // Retirer la sélection précédente
+            document.querySelectorAll('.calendar-day.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // Sélectionner cette date
+            dayEl.classList.add('selected');
+
+            // Charger les rendez-vous de cette date
+            loadAppointmentsForDate(dateStr);
+        };
+
+        return dayEl;
+    }
+
+    function loadMonthAppointments() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const startDate = new Date(year, month, 1);
+        const endDate = new Date(year, month + 1, 0);
+
+        // Charger les rendez-vous via l'API existante
+        fetch('{% url "garage_app:appointment_calendar_api" %}')
+            .then(response => response.json())
+            .then(data => {
+                appointments = {};
+                data.forEach(event => {
+                    const eventDate = new Date(event.start);
+                    const dateStr = eventDate.toISOString().split('T')[0];
+
+                    if (!appointments[dateStr]) {
+                        appointments[dateStr] = [];
+                    }
+
+                    appointments[dateStr].push({
+                        id: event.id,
+                        title: event.title,
+                        client: event.extendedProps.client,
+                        vehicle: event.extendedProps.vehicle,
+                        start_time: eventDate.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
+                        end_time: new Date(event.end).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}),
+                        status: event.extendedProps.status,
+                        status_display: event.extendedProps.status_display,
+                        estimated_price: event.extendedProps.estimated_price,
+                        description: event.extendedProps.description
+                    });
+                });
+
+                // Régénérer le calendrier avec les données
+                generateCalendar();
+            })
+            .catch(error => {
+                console.error('Erreur lors du chargement des rendez-vous:', error);
+            });
+    }
+
+    // Fonction pour changer de mois
+    window.changeMonth = function(direction) {
+        currentDate.setMonth(currentDate.getMonth() + direction);
+        loadMonthAppointments();
+    };
+
+    // Fonction pour charger les rendez-vous d'une date spécifique
+    function loadAppointmentsForDate(dateStr) {
+        const selectedDateEl = document.getElementById('selected-date');
+        const appointmentsListEl = document.getElementById('appointments-list');
+
+        // Formater la date pour l'affichage
+        const date = new Date(dateStr);
+        const options = {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        };
+        selectedDateEl.textContent = date.toLocaleDateString('fr-FR', options);
+
+        // Afficher les rendez-vous de cette date
+        if (appointments[dateStr] && appointments[dateStr].length > 0) {
+            let html = '';
+            appointments[dateStr].forEach(appointment => {
+                html += `
+                    <div class="appointment-item status-${appointment.status}" onclick="window.location.href='/appointments/${appointment.id}/'">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>${appointment.title}</strong>
+                                <br><small class="text-muted">${appointment.client}</small>
+                                ${appointment.vehicle ? `<br><small class="text-muted">${appointment.vehicle}</small>` : ''}
+                            </div>
+                            <div class="text-end">
+                                <small>${appointment.start_time} - ${appointment.end_time}</small>
+                                <br><span class="badge bg-secondary">${appointment.status_display}</span>
+                            </div>
+                        </div>
+                        ${appointment.estimated_price ? `<div class="mt-2"><small class="text-success">Prix estimé: $${appointment.estimated_price}</small></div>` : ''}
+                    </div>
+                `;
+            });
+            appointmentsListEl.innerHTML = html;
+        } else {
+            appointmentsListEl.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-calendar-times fa-2x mb-2"></i>
+                    <p>Aucun rendez-vous ce jour</p>
+                    <a href="{% url 'garage_app:appointment_create' %}?date=${dateStr}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus me-1"></i>Ajouter un rendez-vous
+                    </a>
+                </div>
+            `;
+        }
+    }
 });
 </script>
 {% endblock %}

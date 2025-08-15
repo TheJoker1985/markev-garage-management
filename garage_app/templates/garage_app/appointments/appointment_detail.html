@@ -16,6 +16,9 @@
                 <a href="{% url 'garage_app:appointment_edit' appointment.id %}" class="btn btn-warning">
                     <i class="fas fa-edit me-2"></i>Modifier
                 </a>
+                <a href="{% url 'garage_app:appointment_delete' appointment.id %}" class="btn btn-danger">
+                    <i class="fas fa-trash me-2"></i>Supprimer
+                </a>
                 <a href="{% url 'garage_app:appointment_list' %}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left me-2"></i>Retour à la liste
                 </a>

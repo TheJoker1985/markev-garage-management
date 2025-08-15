@@ -1436,6 +1436,20 @@ def appointment_create(request):
     else:
         form = AppointmentForm()
 
+        # Si une date est passée en paramètre, pré-remplir le formulaire
+        date_param = request.GET.get('date')
+        if date_param:
+            try:
+                target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+                # Définir l'heure par défaut à 9h00
+                start_datetime = datetime.combine(target_date, datetime.min.time().replace(hour=9))
+                end_datetime = start_datetime + timedelta(hours=1)
+
+                form.fields['start_datetime'].initial = start_datetime
+                form.fields['end_datetime'].initial = end_datetime
+            except ValueError:
+                pass  # Ignorer les dates invalides
+
     context = {
         'form': form,
         'title': 'Nouveau rendez-vous',
@@ -1465,6 +1479,64 @@ def appointment_edit(request, appointment_id):
     }
 
     return render(request, 'garage_app/appointments/appointment_form.html', context)
+
+
+@login_required
+def appointment_delete(request, appointment_id):
+    """Vue pour supprimer un rendez-vous"""
+    appointment = get_object_or_404(Appointment, id=appointment_id)
+
+    if request.method == 'POST':
+        appointment_title = appointment.title
+        appointment.delete()
+        messages.success(request, f'Rendez-vous "{appointment_title}" supprimé avec succès.')
+        return redirect('garage_app:appointment_list')
+
+    context = {
+        'appointment': appointment,
+    }
+
+    return render(request, 'garage_app/appointments/appointment_confirm_delete.html', context)
+
+
+@login_required
+def appointment_date_api(request, date):
+    """API pour récupérer les rendez-vous d'une date spécifique"""
+    try:
+        # Parser la date
+        target_date = datetime.strptime(date, '%Y-%m-%d').date()
+
+        # Récupérer les rendez-vous de cette date
+        appointments = Appointment.objects.filter(
+            start_datetime__date=target_date
+        ).select_related('client', 'vehicle').order_by('start_datetime')
+
+        # Formater les données pour JSON
+        appointments_data = []
+        for appointment in appointments:
+            appointments_data.append({
+                'id': appointment.id,
+                'title': appointment.title,
+                'client': appointment.client.full_name,
+                'vehicle': f"{appointment.vehicle.year} {appointment.vehicle.make} {appointment.vehicle.model}" if appointment.vehicle else None,
+                'start_time': appointment.start_datetime.strftime('%H:%M'),
+                'end_time': appointment.end_datetime.strftime('%H:%M'),
+                'status': appointment.status,
+                'status_display': appointment.get_status_display(),
+                'estimated_price': str(appointment.estimated_price) if appointment.estimated_price else None,
+                'description': appointment.description,
+            })
+
+        return JsonResponse({
+            'appointments': appointments_data,
+            'date': date,
+            'count': len(appointments_data)
+        })
+
+    except ValueError:
+        return JsonResponse({'error': 'Format de date invalide'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
 
 
 @login_required

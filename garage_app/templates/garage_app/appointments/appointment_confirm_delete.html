@@ -1,0 +1,61 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}Supprimer {{ appointment.title }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirmer la suppression
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Êtes-vous sûr de vouloir supprimer le rendez-vous <strong>"{{ appointment.title }}"</strong> ?</p>
+                
+                <div class="alert alert-info">
+                    <p><strong>Informations du rendez-vous:</strong></p>
+                    <ul class="mb-0">
+                        <li><strong>Client:</strong> {{ appointment.client.full_name }}</li>
+                        <li><strong>Date et heure:</strong> {{ appointment.start_datetime|date:"d/m/Y H:i" }}</li>
+                        <li><strong>Durée:</strong> {{ appointment.duration_minutes }} minutes</li>
+                        {% if appointment.vehicle %}
+                            <li><strong>Véhicule:</strong> {{ appointment.vehicle.year }} {{ appointment.vehicle.make }} {{ appointment.vehicle.model }}</li>
+                        {% endif %}
+                        {% if appointment.estimated_price %}
+                            <li><strong>Prix estimé:</strong> ${{ appointment.estimated_price|floatformat:2 }}</li>
+                        {% endif %}
+                        <li><strong>Statut:</strong> {{ appointment.get_status_display }}</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Attention:</strong> Cette action est irréversible. Le rendez-vous sera définitivement supprimé.
+                </div>
+                
+                {% if appointment.invoice %}
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Attention:</strong> Ce rendez-vous est lié à la facture #{{ appointment.invoice.invoice_number }}. 
+                    La suppression du rendez-vous ne supprimera pas la facture.
+                </div>
+                {% endif %}
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'garage_app:appointment_detail' appointment.id %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Annuler
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Supprimer définitivement
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

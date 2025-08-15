@@ -76,6 +76,7 @@ urlpatterns = [
     path('appointments/<int:appointment_id>/create-invoice/', views.appointment_create_invoice, name='appointment_create_invoice'),
     path('appointments/calendar/', views.appointment_calendar, name='appointment_calendar'),
     path('api/appointments/', views.appointment_calendar_api, name='appointment_calendar_api'),
+    path('appointments/api/date/<str:date>/', views.appointment_date_api, name='appointment_date_api'),
 
     # URLs pour l'inventaire
     path('inventory/', views.inventory_list, name='inventory_list'),

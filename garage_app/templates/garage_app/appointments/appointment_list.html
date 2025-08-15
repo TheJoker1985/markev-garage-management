@@ -150,16 +150,20 @@
                                                class="btn btn-outline-info" title="Voir">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="{% url 'garage_app:appointment_edit' appointment.id %}" 
+                                            <a href="{% url 'garage_app:appointment_edit' appointment.id %}"
                                                class="btn btn-outline-warning" title="Modifier">
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% if appointment.can_create_invoice %}
-                                                <a href="{% url 'garage_app:appointment_create_invoice' appointment.id %}" 
+                                                <a href="{% url 'garage_app:appointment_create_invoice' appointment.id %}"
                                                    class="btn btn-outline-success" title="Créer facture">
                                                     <i class="fas fa-file-invoice"></i>
                                                 </a>
                                             {% endif %}
+                                            <a href="{% url 'garage_app:appointment_delete' appointment.id %}"
+                                               class="btn btn-outline-danger" title="Supprimer">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
                                         </div>
                                     </td>
                                 </tr>

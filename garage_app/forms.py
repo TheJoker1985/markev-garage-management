@@ -374,8 +374,16 @@ class AppointmentForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Description détaillée'}),
             'client': forms.Select(attrs={'class': 'form-select'}),
             'vehicle': forms.Select(attrs={'class': 'form-select'}),
-            'start_datetime': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
-            'end_datetime': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'start_datetime': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local',
+                'step': '900'  # 15 minutes en secondes
+            }),
+            'end_datetime': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local',
+                'step': '900'  # 15 minutes en secondes
+            }),
             'status': forms.Select(attrs={'class': 'form-select'}),
             'estimated_services': forms.CheckboxSelectMultiple(),
             'estimated_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.00'}),
@@ -390,8 +398,15 @@ class AppointmentForm(forms.ModelForm):
         # Définir des valeurs par défaut
         if not self.instance.pk:
             now = datetime.now()
-            self.fields['start_datetime'].initial = now.replace(minute=0, second=0, microsecond=0)
-            self.fields['end_datetime'].initial = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            # Arrondir aux 15 minutes les plus proches
+            minutes = (now.minute // 15) * 15
+            start_time = now.replace(minute=minutes, second=0, microsecond=0)
+            # Si on est déjà passé ce quart d'heure, passer au suivant
+            if now.minute % 15 > 0:
+                start_time = start_time + timedelta(minutes=15)
+
+            self.fields['start_datetime'].initial = start_time
+            self.fields['end_datetime'].initial = start_time + timedelta(hours=1)
 
 
 class StockReceiptForm(forms.ModelForm):
