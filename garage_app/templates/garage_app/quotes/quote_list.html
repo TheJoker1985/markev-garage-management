@@ -1,0 +1,202 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Soumissions{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- En-tête avec bouton d'ajout -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-file-contract text-primary me-2"></i>
+                        Soumissions
+                    </h1>
+                    <p class="text-muted mb-0">Gestion des devis et soumissions</p>
+                </div>
+                <div>
+                    <a href="{% url 'garage_app:quote_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>
+                        Nouvelle soumission
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filtres et recherche -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="search" class="form-label">Recherche</label>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   value="{{ search_query }}" placeholder="Numéro, client, email...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="status" class="form-label">Statut</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">Tous les statuts</option>
+                                {% for value, label in status_choices %}
+                                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-outline-primary me-2">
+                                <i class="fas fa-search"></i> Filtrer
+                            </button>
+                            <a href="{% url 'garage_app:quote_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Liste des soumissions -->
+            <div class="card">
+                <div class="card-body">
+                    {% if page_obj %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Numéro</th>
+                                        <th>Date</th>
+                                        <th>Client</th>
+                                        <th>Véhicule</th>
+                                        <th>Montant</th>
+                                        <th>Statut</th>
+                                        <th>Valide jusqu'au</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for quote in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <a href="{% url 'garage_app:quote_detail' quote.id %}" class="text-decoration-none">
+                                                <strong>{{ quote.quote_number }}</strong>
+                                            </a>
+                                        </td>
+                                        <td>{{ quote.date|date:"d/m/Y" }}</td>
+                                        <td>
+                                            <div>
+                                                <strong>{{ quote.client.name }}</strong>
+                                                <br><small class="text-muted">{{ quote.client.email }}</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if quote.vehicle %}
+                                                {{ quote.vehicle.year }} {{ quote.vehicle.make }} {{ quote.vehicle.model }}
+                                                <br><small class="text-muted">{{ quote.vehicle.license_plate }}</small>
+                                            {% else %}
+                                                <span class="text-muted">Aucun véhicule</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <strong>${{ quote.total_amount|floatformat:2 }}</strong>
+                                            {% if quote.discount_amount > 0 %}
+                                                <br><small class="text-success">-${{ quote.discount_amount|floatformat:2 }} rabais</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if quote.status == 'draft' %}
+                                                <span class="badge bg-secondary">{{ quote.get_status_display }}</span>
+                                            {% elif quote.status == 'sent' %}
+                                                <span class="badge bg-info">{{ quote.get_status_display }}</span>
+                                            {% elif quote.status == 'accepted' %}
+                                                <span class="badge bg-success">{{ quote.get_status_display }}</span>
+                                            {% elif quote.status == 'rejected' %}
+                                                <span class="badge bg-danger">{{ quote.get_status_display }}</span>
+                                            {% elif quote.status == 'expired' %}
+                                                <span class="badge bg-warning">{{ quote.get_status_display }}</span>
+                                            {% elif quote.status == 'converted' %}
+                                                <span class="badge bg-primary">{{ quote.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ quote.valid_until|date:"d/m/Y" }}
+                                            {% if quote.is_expired %}
+                                                <br><small class="text-danger">Expirée</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'garage_app:quote_detail' quote.id %}" 
+                                                   class="btn btn-outline-primary" title="Voir">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if quote.status not in 'converted,accepted' %}
+                                                    <a href="{% url 'garage_app:quote_update' quote.id %}" 
+                                                       class="btn btn-outline-warning" title="Modifier">
+                                                        <i class="fas fa-edit"></i>
+                                                    </a>
+                                                {% endif %}
+                                                {% if quote.can_be_converted %}
+                                                    <a href="{% url 'garage_app:quote_convert_to_invoice' quote.id %}" 
+                                                       class="btn btn-outline-success" title="Convertir en facture">
+                                                        <i class="fas fa-exchange-alt"></i>
+                                                    </a>
+                                                {% endif %}
+                                                <a href="{% url 'garage_app:quote_delete' quote.id %}" 
+                                                   class="btn btn-outline-danger" title="Supprimer"
+                                                   onclick="return confirm('Êtes-vous sûr de vouloir supprimer la soumission {{ quote.quote_number }} ?')">
+                                                    <i class="fas fa-trash-alt"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        {% if page_obj.has_other_pages %}
+                            <nav aria-label="Navigation des soumissions">
+                                <ul class="pagination justify-content-center">
+                                    {% if page_obj.has_previous %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Première</a>
+                                        </li>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Précédente</a>
+                                        </li>
+                                    {% endif %}
+                                    
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}</span>
+                                    </li>
+                                    
+                                    {% if page_obj.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Suivante</a>
+                                        </li>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Dernière</a>
+                                        </li>
+                                    {% endif %}
+                                </ul>
+                            </nav>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-contract fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Aucune soumission trouvée</h5>
+                            <p class="text-muted">Commencez par créer votre première soumission.</p>
+                            <a href="{% url 'garage_app:quote_create' %}" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>
+                                Nouvelle soumission
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

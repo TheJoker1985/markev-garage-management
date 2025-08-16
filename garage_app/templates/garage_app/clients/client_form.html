@@ -65,7 +65,21 @@
                             <div class="text-danger">{{ form.notes.errors }}</div>
                         {% endif %}
                     </div>
-                    
+
+                    <div class="mb-3">
+                        <label for="{{ form.default_discount_percentage.id_for_label }}" class="form-label">
+                            <i class="fas fa-percent me-2"></i>{{ form.default_discount_percentage.label }}
+                        </label>
+                        {{ form.default_discount_percentage }}
+                        {% if form.default_discount_percentage.errors %}
+                            <div class="text-danger">{{ form.default_discount_percentage.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Ce rabais sera automatiquement appliqué aux nouvelles factures de ce client (0-100%)
+                        </div>
+                    </div>
+
                     <div class="d-flex justify-content-between">
                         <a href="{% if client %}{% url 'garage_app:client_detail' client.id %}{% else %}{% url 'garage_app:client_list' %}{% endif %}" 
                            class="btn btn-secondary">Annuler</a>
@@ -92,6 +106,7 @@
                     <li>L'email permet d'envoyer les factures automatiquement</li>
                     <li>L'adresse est utile pour les services à domicile</li>
                     <li>Utilisez les notes pour des informations importantes</li>
+                    <li>Le rabais par défaut s'applique automatiquement aux nouvelles factures</li>
                 </ul>
             </div>
         </div>

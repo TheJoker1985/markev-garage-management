@@ -1,0 +1,365 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ title }} - MarKev{% endblock %}
+
+{% block content %}
+<style>
+.quote-item-form {
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.quote-item-form:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,123,255,0.15) !important;
+}
+
+.form-control, .form-select {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    transition: border-color 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13,110,253,0.25);
+}
+
+.btn-outline-danger:hover {
+    transform: scale(1.05);
+    transition: transform 0.2s ease;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+</style>
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">{{ title }}</h1>
+    </div>
+</div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+<form method="post" id="quote-form">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <!-- Informations de base -->
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Informations de base</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.client.label }} *</label>
+                                            {{ form.client }}
+                                            {% if form.client.errors %}
+                                                <div class="text-danger small">{{ form.client.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.vehicle.label }}</label>
+                                            {{ form.vehicle }}
+                                            {% if form.vehicle.errors %}
+                                                <div class="text-danger small">{{ form.vehicle.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.valid_until.label }} *</label>
+                                            {{ form.valid_until }}
+                                            {% if form.valid_until.errors %}
+                                                <div class="text-danger small">{{ form.valid_until.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.discount_percentage.label }}</label>
+                                            <div class="input-group">
+                                                {{ form.discount_percentage }}
+                                                <span class="input-group-text">%</span>
+                                            </div>
+                                            {% if form.discount_percentage.errors %}
+                                                <div class="text-danger small">{{ form.discount_percentage.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <div class="form-check">
+                                        {{ form.is_dealer_discount }}
+                                        <label class="form-check-label" for="{{ form.is_dealer_discount.id_for_label }}">
+                                            {{ form.is_dealer_discount.label }}
+                                        </label>
+                                    </div>
+                                    {% if form.is_dealer_discount.errors %}
+                                        <div class="text-danger small">{{ form.is_dealer_discount.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Informations client -->
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Informations client</h5>
+                            </div>
+                            <div class="card-body" id="client-info">
+                                <p class="text-muted">Sélectionnez un client pour voir ses informations</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services et éléments de soumission -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Services et éléments de soumission</h5>
+                    </div>
+                    <div class="card-body">
+                        {{ formset.management_form }}
+                        
+                        <div id="quote-items-container">
+                            {% for form in formset %}
+                                <div class="quote-item-form border rounded p-3 mb-3" style="background-color: #f8f9fa;">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-tools text-primary me-2"></i>
+                                            Service {{ forloop.counter }}
+                                        </h6>
+                                        {% if not forloop.first %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Supprimer">
+                                                <i class="fas fa-trash-alt"></i>
+                                                Supprimer
+                                            </button>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="form-group">
+                                                <label class="form-label fw-bold">Service *</label>
+                                                {{ form.service }}
+                                                {% if form.service.errors %}
+                                                    <div class="text-danger small">{{ form.service.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label fw-bold">Prix ($)</label>
+                                                {{ form.price }}
+                                                {% if form.price.errors %}
+                                                    <div class="text-danger small">{{ form.price.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="form-group">
+                                                <div class="form-check mb-2">
+                                                    <input type="checkbox" class="form-check-input" id="custom-desc-{{ forloop.counter0 }}">
+                                                    <label class="form-check-label" for="custom-desc-{{ forloop.counter0 }}">
+                                                        Description personnalisée
+                                                    </label>
+                                                </div>
+                                                {{ form.description }}
+                                                {% if form.description.errors %}
+                                                    <div class="text-danger small">{{ form.description.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Champs cachés -->
+                                    {% for hidden in form.hidden_fields %}
+                                        {{ hidden }}
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-outline-primary" id="add-service-btn">
+                                <i class="fas fa-plus me-1"></i>
+                                Ajouter un service
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes et conditions -->
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Notes internes</h5>
+                            </div>
+                            <div class="card-body">
+                                {{ form.notes }}
+                                {% if form.notes.errors %}
+                                    <div class="text-danger small">{{ form.notes.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Conditions générales</h5>
+                            </div>
+                            <div class="card-body">
+                                {{ form.terms_conditions }}
+                                {% if form.terms_conditions.errors %}
+                                    <div class="text-danger small">{{ form.terms_conditions.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'garage_app:quote_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>
+                        Annuler
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>
+                        {% if quote %}Modifier{% else %}Créer{% endif %} la soumission
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion du changement de client
+    const clientSelect = document.getElementById('id_client');
+    const vehicleSelect = document.getElementById('id_vehicle');
+    const clientInfoDiv = document.getElementById('client-info');
+
+    clientSelect.addEventListener('change', function() {
+        const clientId = this.value;
+
+        if (clientId) {
+            // Charger les véhicules du client
+            fetch(`/ajax/get-vehicles/${clientId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    vehicleSelect.innerHTML = '<option value="">---------</option>';
+                    data.forEach(vehicle => {
+                        const option = document.createElement('option');
+                        option.value = vehicle.id;
+                        option.textContent = `${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.license_plate})`;
+                        vehicleSelect.appendChild(option);
+                    });
+                });
+
+            // Charger les informations du client
+            fetch(`/ajax/get-client-info/${clientId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.client) {
+                        clientInfoDiv.innerHTML = `
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Nom:</strong> ${data.client.name}</p>
+                                    <p><strong>Email:</strong> ${data.client.email}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Téléphone:</strong> ${data.client.phone}</p>
+                                    <p><strong>Rabais par défaut:</strong> ${data.client.default_discount_percentage}%</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+        } else {
+            vehicleSelect.innerHTML = '<option value="">---------</option>';
+            clientInfoDiv.innerHTML = '<p class="text-muted">Sélectionnez un client pour voir ses informations</p>';
+        }
+    });
+
+    // Auto-remplissage du prix des services
+    function setupServicePriceAutoFill() {
+        const serviceSelects = document.querySelectorAll('select[name*="service"]');
+        serviceSelects.forEach(function(select) {
+            select.addEventListener('change', function() {
+                const serviceId = this.value;
+                if (serviceId) {
+                    const priceInput = this.closest('.quote-item-form').querySelector('input[name*="price"]');
+
+                    fetch('/ajax/get-services/')
+                        .then(response => response.json())
+                        .then(data => {
+                            const service = data.find(s => s.id == serviceId);
+                            if (service && priceInput) {
+                                priceInput.value = service.default_price;
+                            }
+                        });
+                }
+            });
+        });
+    }
+
+    // Initialiser l'auto-remplissage du prix au chargement de la page
+    setupServicePriceAutoFill();
+
+    // S'assurer que tous les champs item_type sont définis à "service"
+    function ensureItemTypeService() {
+        const itemTypeSelects = document.querySelectorAll('select[name*="item_type"]');
+        itemTypeSelects.forEach(function(select) {
+            select.value = 'service';
+        });
+    }
+
+    // Appeler au chargement et quand de nouvelles lignes sont ajoutées
+    ensureItemTypeService();
+
+    // Réinitialiser l'auto-remplissage quand de nouvelles lignes sont ajoutées au formset
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                setupServicePriceAutoFill();
+                ensureItemTypeService();
+            }
+        });
+    });
+
+    observer.observe(document.getElementById('quote-items-container'), {
+        childList: true,
+        subtree: true
+    });
+});
+</script>
+{% endblock %}
+
+{% endblock %}

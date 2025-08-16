@@ -1,0 +1,336 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- En-tête -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="{{ icon_class }} me-2"></i>
+                        {{ title }}
+                    </h1>
+                    <p class="text-muted mb-0">{{ subtitle }}</p>
+                </div>
+                <div>
+                    <a href="{{ back_url }}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        Retour à la liste
+                    </a>
+                </div>
+            </div>
+
+            <!-- Messages d'erreur globaux -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Formulaire -->
+            <form method="post" id="document-form">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <!-- Informations de base -->
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Informations de base</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.client.label }} *</label>
+                                            {{ form.client }}
+                                            {% if form.client.errors %}
+                                                <div class="text-danger small">{{ form.client.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.vehicle.label }}</label>
+                                            {{ form.vehicle }}
+                                            {% if form.vehicle.errors %}
+                                                <div class="text-danger small">{{ form.vehicle.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Champs spécifiques aux soumissions -->
+                                {% block extra_fields %}{% endblock %}
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">{{ form.discount_percentage.label }}</label>
+                                            <div class="input-group">
+                                                {{ form.discount_percentage }}
+                                                <span class="input-group-text">%</span>
+                                            </div>
+                                            {% if form.discount_percentage.errors %}
+                                                <div class="text-danger small">{{ form.discount_percentage.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group mb-3">
+                                            <div class="form-check mt-4">
+                                                {{ form.is_dealer_discount }}
+                                                <label class="form-check-label" for="{{ form.is_dealer_discount.id_for_label }}">
+                                                    {{ form.is_dealer_discount.label }}
+                                                </label>
+                                            </div>
+                                            {% if form.is_dealer_discount.errors %}
+                                                <div class="text-danger small">{{ form.is_dealer_discount.errors }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Informations client -->
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Informations client</h5>
+                            </div>
+                            <div class="card-body" id="client-info">
+                                <p class="text-muted">Sélectionnez un client pour voir ses informations</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services et éléments -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ items_title|default:"Services et éléments" }}</h5>
+                    </div>
+                    <div class="card-body">
+                        {{ formset.management_form }}
+                        
+                        <div id="document-items-container">
+                            {% for form in formset %}
+                                <div class="document-item-form border rounded p-3 mb-3" style="background-color: #f8f9fa;">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-tools text-primary me-2"></i>
+                                            Service {{ forloop.counter }}
+                                        </h6>
+                                        {% if not forloop.first %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm" title="Supprimer">
+                                                <i class="fas fa-trash-alt"></i>
+                                                Supprimer
+                                            </button>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-8">
+                                            <div class="form-group">
+                                                <label class="form-label fw-bold">Service *</label>
+                                                {{ form.service }}
+                                                {% if form.service.errors %}
+                                                    <div class="text-danger small">{{ form.service.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label class="form-label fw-bold">Prix ($)</label>
+                                                {{ form.price }}
+                                                {% if form.price.errors %}
+                                                    <div class="text-danger small">{{ form.price.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="form-group">
+                                                <div class="form-check mb-2">
+                                                    <input type="checkbox" class="form-check-input" id="custom-desc-{{ forloop.counter0 }}">
+                                                    <label class="form-check-label" for="custom-desc-{{ forloop.counter0 }}">
+                                                        Description personnalisée
+                                                    </label>
+                                                </div>
+                                                {{ form.description }}
+                                                {% if form.description.errors %}
+                                                    <div class="text-danger small">{{ form.description.errors }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Champs cachés -->
+                                    {% for hidden in form.hidden_fields %}
+                                        {{ hidden }}
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-outline-primary" id="add-service-btn">
+                                <i class="fas fa-plus me-1"></i>
+                                Ajouter un service
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">{{ notes_title|default:"Notes" }}</h5>
+                            </div>
+                            <div class="card-body">
+                                {{ form.notes }}
+                                {% if form.notes.errors %}
+                                    <div class="text-danger small">{{ form.notes.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Champs supplémentaires -->
+                    {% block extra_notes %}{% endblock %}
+                </div>
+
+                <!-- Boutons d'action -->
+                <div class="d-flex justify-content-between">
+                    <a href="{{ back_url }}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>
+                        Annuler
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>
+                        {{ submit_text }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gestion du changement de client
+    const clientSelect = document.getElementById('id_client');
+    const vehicleSelect = document.getElementById('id_vehicle');
+    const clientInfoDiv = document.getElementById('client-info');
+
+    clientSelect.addEventListener('change', function() {
+        const clientId = this.value;
+        
+        if (clientId) {
+            // Charger les véhicules du client
+            fetch(`/ajax/get-vehicles/${clientId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    vehicleSelect.innerHTML = '<option value="">---------</option>';
+                    data.forEach(vehicle => {
+                        const option = document.createElement('option');
+                        option.value = vehicle.id;
+                        option.textContent = `${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.license_plate})`;
+                        vehicleSelect.appendChild(option);
+                    });
+                });
+
+            // Charger les informations du client
+            fetch(`/ajax/get-client-info/${clientId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.client) {
+                        clientInfoDiv.innerHTML = `
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Nom:</strong> ${data.client.name}</p>
+                                    <p><strong>Email:</strong> ${data.client.email}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Téléphone:</strong> ${data.client.phone}</p>
+                                    <p><strong>Rabais par défaut:</strong> ${data.client.default_discount_percentage}%</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+        } else {
+            vehicleSelect.innerHTML = '<option value="">---------</option>';
+            clientInfoDiv.innerHTML = '<p class="text-muted">Sélectionnez un client pour voir ses informations</p>';
+        }
+    });
+
+    // Auto-remplissage du prix des services
+    function setupServicePriceAutoFill() {
+        const serviceSelects = document.querySelectorAll('select[name*="service"]');
+        serviceSelects.forEach(function(select) {
+            select.addEventListener('change', function() {
+                const serviceId = this.value;
+                if (serviceId) {
+                    const priceInput = this.closest('.document-item-form').querySelector('input[name*="price"]');
+                    
+                    fetch('/ajax/get-services/')
+                        .then(response => response.json())
+                        .then(data => {
+                            const service = data.find(s => s.id == serviceId);
+                            if (service && priceInput) {
+                                priceInput.value = service.default_price;
+                            }
+                        });
+                }
+            });
+        });
+    }
+
+    // Initialiser l'auto-remplissage du prix au chargement de la page
+    setupServicePriceAutoFill();
+    
+    // S'assurer que tous les champs item_type sont définis à "service"
+    function ensureItemTypeService() {
+        const itemTypeSelects = document.querySelectorAll('select[name*="item_type"]');
+        itemTypeSelects.forEach(function(select) {
+            select.value = 'service';
+        });
+    }
+    
+    // Appeler au chargement et quand de nouvelles lignes sont ajoutées
+    ensureItemTypeService();
+
+    // Réinitialiser l'auto-remplissage quand de nouvelles lignes sont ajoutées au formset
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                setupServicePriceAutoFill();
+                ensureItemTypeService();
+            }
+        });
+    });
+
+    observer.observe(document.getElementById('document-items-container'), {
+        childList: true,
+        subtree: true
+    });
+});
+</script>
+{% endblock %}
+
+{% endblock %}

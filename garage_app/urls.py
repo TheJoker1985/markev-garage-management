@@ -37,7 +37,16 @@ urlpatterns = [
     path('invoices/new/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:invoice_id>/edit/', views.invoice_update, name='invoice_update'),
     path('invoices/<int:invoice_id>/mark-paid/', views.invoice_mark_paid, name='invoice_mark_paid'),
+    path('invoices/<int:invoice_id>/delete/', views.invoice_delete, name='invoice_delete'),
     path('invoices/<int:invoice_id>/pdf/', views.generate_invoice_pdf, name='generate_invoice_pdf'),
+
+    # Gestion des soumissions
+    path('quotes/', views.quote_list, name='quote_list'),
+    path('quotes/<int:quote_id>/', views.quote_detail, name='quote_detail'),
+    path('quotes/new/', views.quote_create, name='quote_create'),
+    path('quotes/<int:quote_id>/edit/', views.quote_update, name='quote_update'),
+    path('quotes/<int:quote_id>/delete/', views.quote_delete, name='quote_delete'),
+    path('quotes/<int:quote_id>/convert/', views.quote_convert_to_invoice, name='quote_convert_to_invoice'),
 
     # Gestion des dépenses
     path('expenses/', views.expense_list, name='expense_list'),
@@ -51,6 +60,8 @@ urlpatterns = [
 
     # AJAX endpoints
     path('ajax/get-vehicles/<int:client_id>/', views.get_client_vehicles, name='get_client_vehicles'),
+    path('ajax/get-client-info/<int:client_id>/', views.get_client_info, name='get_client_info'),
+    path('ajax/get-services/', views.get_services, name='get_services'),
 
     # URLs pour les fournisseurs
     path('suppliers/', views.supplier_list, name='supplier_list'),
@@ -81,6 +92,11 @@ urlpatterns = [
 
     # URLs pour l'inventaire
     path('inventory/', views.inventory_list, name='inventory_list'),
+
+    # URLs pour les alertes de stock
+    path('stock-alerts/', views.stock_alerts_dashboard, name='stock_alerts_dashboard'),
+    path('stock-alerts/<int:alert_id>/', views.stock_alert_detail, name='stock_alert_detail'),
+    path('stock-alerts/run-check/', views.run_stock_check, name='run_stock_check'),
 
     # URLs pour les bons de réception
     path('stock-receipts/', views.stock_receipt_list, name='stock_receipt_list'),

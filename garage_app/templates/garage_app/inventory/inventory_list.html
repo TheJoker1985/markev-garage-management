@@ -15,6 +15,12 @@
                 <a href="{% url 'garage_app:stock_receipt_list' %}" class="btn btn-success me-2">
                     <i class="fas fa-truck me-2"></i>Réception de commande
                 </a>
+                <a href="{% url 'garage_app:stock_alerts_dashboard' %}" class="btn btn-warning me-2" title="Tableau de bord des alertes de stock">
+                    <i class="fas fa-bell me-2"></i>Alertes
+                    {% if active_alerts > 0 %}
+                        <span class="badge bg-danger">{{ active_alerts }}</span>
+                    {% endif %}
+                </a>
                 <a href="{% url 'admin:garage_app_inventoryitem_add' %}" class="btn btn-primary">
                     <i class="fas fa-plus me-2"></i>Nouvel article
                 </a>
@@ -25,7 +31,7 @@
 
 <!-- Statistiques rapides -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card bg-primary text-white">
             <div class="card-body text-center">
                 <h5>{{ total_items }}</h5>
@@ -33,7 +39,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card bg-success text-white">
             <div class="card-body text-center">
                 <h5>${{ total_value|floatformat:2 }}</h5>
@@ -41,19 +47,35 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h5>{{ out_of_stock_items }}</h5>
+                <p class="mb-0">Rupture stock</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5>{{ reorder_items }}</h5>
+                <p class="mb-0">À réapprovisionner</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-info text-white">
             <div class="card-body text-center">
                 <h5>{{ low_stock_items }}</h5>
                 <p class="mb-0">Stock faible</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
+    <div class="col-md-2">
+        <div class="card bg-secondary text-white">
             <div class="card-body text-center">
-                <h5>{{ total_suppliers }}</h5>
-                <p class="mb-0">Fournisseurs actifs</p>
+                <h5>{{ active_alerts }}</h5>
+                <p class="mb-0">Alertes actives</p>
             </div>
         </div>
     </div>
@@ -65,15 +87,15 @@
         <div class="card mb-4">
             <div class="card-body">
                 <form method="get" class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="search" class="form-label">Recherche</label>
-                        <input type="text" class="form-control" id="search" name="search" 
+                        <input type="text" class="form-control" id="search" name="search"
                                value="{{ search_query }}" placeholder="Nom, SKU, description...">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="category" class="form-label">Catégorie</label>
                         <select class="form-select" id="category" name="category">
-                            <option value="">Toutes les catégories</option>
+                            <option value="">Toutes</option>
                             {% for value, label in categories %}
                                 <option value="{{ value }}" {% if category_filter == value %}selected{% endif %}>
                                     {{ label }}
@@ -81,15 +103,33 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="supplier" class="form-label">Fournisseur</label>
                         <select class="form-select" id="supplier" name="supplier">
-                            <option value="">Tous les fournisseurs</option>
+                            <option value="">Tous</option>
                             {% for supplier in suppliers %}
                                 <option value="{{ supplier.id }}" {% if supplier_filter == supplier.id|stringformat:"s" %}selected{% endif %}>
                                     {{ supplier.name }}
                                 </option>
                             {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="alert_filter" class="form-label">Filtrer par alerte</label>
+                        <select class="form-select" id="alert_filter" name="alert_filter">
+                            <option value="">Tous les articles</option>
+                            <option value="out_of_stock" {% if alert_filter == 'out_of_stock' %}selected{% endif %}>
+                                🚨 Rupture de stock
+                            </option>
+                            <option value="needs_reorder" {% if alert_filter == 'needs_reorder' %}selected{% endif %}>
+                                ⚠️ À réapprovisionner
+                            </option>
+                            <option value="low_stock" {% if alert_filter == 'low_stock' %}selected{% endif %}>
+                                📉 Stock faible
+                            </option>
+                            <option value="active_alerts" {% if alert_filter == 'active_alerts' %}selected{% endif %}>
+                                🔔 Avec alertes actives
+                            </option>
                         </select>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
@@ -115,10 +155,10 @@
                                     <th>Article</th>
                                     <th>Fournisseur</th>
                                     <th>Catégorie</th>
-                                    <th>Stock</th>
+                                    <th>Stock & Seuils</th>
                                     <th>Prix</th>
                                     <th>Valeur totale</th>
-                                    <th>Statut</th>
+                                    <th>Alertes</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -145,10 +185,22 @@
                                             <span class="badge bg-secondary">{{ item.get_category_display }}</span>
                                         </td>
                                         <td>
-                                            <strong>{{ item.quantity_in_stock }}</strong>
-                                            {% if item.minimum_stock_level and item.quantity_in_stock <= item.minimum_stock_level %}
-                                                <br><span class="badge bg-warning">Stock faible</span>
-                                            {% endif %}
+                                            <div class="mb-1">
+                                                <strong>Stock: {{ item.quantity_in_stock }}</strong>
+                                                {% if item.quantity_in_stock == 0 %}
+                                                    <span class="badge bg-danger ms-1">Rupture</span>
+                                                {% elif item.needs_reorder %}
+                                                    <span class="badge bg-warning ms-1">Réappro</span>
+                                                {% elif item.is_low_stock %}
+                                                    <span class="badge bg-info ms-1">Faible</span>
+                                                {% else %}
+                                                    <span class="badge bg-success ms-1">OK</span>
+                                                {% endif %}
+                                            </div>
+                                            <small class="text-muted">
+                                                Min: {{ item.minimum_stock_level }} |
+                                                Réappro: {{ item.reorder_level }}
+                                            </small>
                                         </td>
                                         <td>
                                             <div>Coût: <strong>${{ item.unit_cost|floatformat:2 }}</strong></div>
@@ -158,11 +210,24 @@
                                             <strong>${{ item.total_value|floatformat:2 }}</strong>
                                         </td>
                                         <td>
-                                            {% if item.is_active %}
-                                                <span class="badge bg-success">Actif</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary">Inactif</span>
-                                            {% endif %}
+                                            {% with active_alerts=item.stock_alerts.all %}
+                                                {% if active_alerts %}
+                                                    {% for alert in active_alerts %}
+                                                        {% if alert.status == 'active' %}
+                                                            {% if alert.alert_type == 'out_of_stock' %}
+                                                                <span class="badge bg-danger mb-1">🚨 Rupture</span>
+                                                            {% elif alert.alert_type == 'reorder' %}
+                                                                <span class="badge bg-warning mb-1">⚠️ Réappro</span>
+                                                            {% elif alert.alert_type == 'low_stock' %}
+                                                                <span class="badge bg-info mb-1">📉 Stock faible</span>
+                                                            {% endif %}
+                                                            <br>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <span class="text-muted">Aucune alerte</span>
+                                                {% endif %}
+                                            {% endwith %}
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">

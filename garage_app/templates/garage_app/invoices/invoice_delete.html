@@ -1,0 +1,144 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Supprimer la facture {{ invoice.invoice_number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <!-- En-tête avec navigation -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-trash-alt text-danger me-2"></i>
+                        Supprimer la facture
+                    </h1>
+                    <p class="text-muted mb-0">Confirmation de suppression</p>
+                </div>
+                <div>
+                    <a href="{% url 'garage_app:invoice_detail' invoice.id %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>
+                        Retour à la facture
+                    </a>
+                </div>
+            </div>
+
+            <!-- Carte de confirmation -->
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <div class="card border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Attention - Suppression définitive
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning" role="alert">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-warning me-2"></i>
+                                    Cette action est irréversible !
+                                </h6>
+                                <p class="mb-0">
+                                    Vous êtes sur le point de supprimer définitivement cette facture. 
+                                    Toutes les données associées seront perdues.
+                                </p>
+                            </div>
+
+                            <!-- Informations de la facture -->
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Informations de la facture :</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Numéro :</strong></td>
+                                            <td>{{ invoice.invoice_number }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Date :</strong></td>
+                                            <td>{{ invoice.date|date:"d/m/Y" }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Client :</strong></td>
+                                            <td>{{ invoice.client.name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Véhicule :</strong></td>
+                                            <td>
+                                                {% if invoice.vehicle %}
+                                                    {{ invoice.vehicle.year }} {{ invoice.vehicle.make }} {{ invoice.vehicle.model }}
+                                                {% else %}
+                                                    Aucun véhicule
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Montants :</h6>
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Sous-total :</strong></td>
+                                            <td>${{ invoice.subtotal|floatformat:2 }}</td>
+                                        </tr>
+                                        {% if invoice.discount_amount > 0 %}
+                                        <tr>
+                                            <td><strong>Rabais :</strong></td>
+                                            <td class="text-success">-${{ invoice.discount_amount|floatformat:2 }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        <tr>
+                                            <td><strong>Taxes :</strong></td>
+                                            <td>${{ invoice.gst_amount|add:invoice.qst_amount|floatformat:2 }}</td>
+                                        </tr>
+                                        <tr class="table-primary">
+                                            <td><strong>Total :</strong></td>
+                                            <td><strong>${{ invoice.total_amount|floatformat:2 }}</strong></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Services/éléments -->
+                            {% if invoice.invoice_items.exists %}
+                            <div class="mb-4">
+                                <h6 class="text-muted">Services inclus :</h6>
+                                <ul class="list-group list-group-flush">
+                                    {% for item in invoice.invoice_items.all %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ item.service.name }}</strong>
+                                            {% if item.description %}
+                                                <br><small class="text-muted">{{ item.description }}</small>
+                                            {% endif %}
+                                        </div>
+                                        <span class="badge bg-primary rounded-pill">${{ item.price|floatformat:2 }}</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+
+                            <!-- Formulaire de confirmation -->
+                            <form method="post" class="mt-4">
+                                {% csrf_token %}
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'garage_app:invoice_detail' invoice.id %}" class="btn btn-secondary">
+                                        <i class="fas fa-times me-1"></i>
+                                        Annuler
+                                    </a>
+                                    <button type="submit" class="btn btn-danger" onclick="return confirm('Êtes-vous absolument certain de vouloir supprimer cette facture ? Cette action ne peut pas être annulée.')">
+                                        <i class="fas fa-trash-alt me-1"></i>
+                                        Confirmer la suppression
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

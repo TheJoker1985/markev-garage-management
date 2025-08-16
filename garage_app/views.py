@@ -8,12 +8,13 @@ from django.core.paginator import Paginator
 from datetime import date, timedelta
 from .models import (
     Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem,
-    Supplier, RecurringExpense, Appointment, InventoryItem, StockReceipt, StockReceiptItem
+    Supplier, RecurringExpense, Appointment, InventoryItem, StockAlert, StockReceipt, StockReceiptItem,
+    Quote, QuoteItem
 )
 from .forms import (
     CompanyProfileForm, ClientForm, VehicleForm, ServiceForm, InvoiceForm,
     InvoiceItemFormSet, ExpenseForm, SupplierForm, RecurringExpenseForm, AppointmentForm,
-    StockReceiptForm, StockReceiptItemFormSet
+    StockReceiptForm, StockReceiptItemFormSet, QuoteForm, QuoteItemFormSet
 )
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -78,10 +79,8 @@ def dashboard(request):
 
     # Factures en attente
     pending_invoices = Invoice.objects.filter(status__in=['sent', 'draft']).count()
-    overdue_invoices = Invoice.objects.filter(
-        due_date__lt=today,
-        status__in=['sent', 'draft']
-    ).count()
+    # Note: Plus de date d'échéance, donc pas de factures en retard
+    overdue_invoices = 0
 
     # Clients et services
     total_clients = Client.objects.count()
@@ -513,6 +512,10 @@ def invoice_create(request):
 
         if form.is_valid() and formset.is_valid():
             invoice = form.save()
+
+            # Appliquer le rabais par défaut du client si nécessaire
+            invoice.apply_client_default_discount()
+
             formset.instance = invoice
             formset.save()
 
@@ -521,6 +524,28 @@ def invoice_create(request):
 
             messages.success(request, f'Facture {invoice.invoice_number} créée avec succès.')
             return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
+        else:
+            # Debug : afficher les erreurs de validation
+            print("=== ERREURS DE VALIDATION ===")
+            if not form.is_valid():
+                print("Erreurs du formulaire principal:")
+                for field, errors in form.errors.items():
+                    print(f"  {field}: {errors}")
+
+            if not formset.is_valid():
+                print("Erreurs du formset:")
+                for i, form_errors in enumerate(formset.errors):
+                    if form_errors:
+                        print(f"  Formulaire {i}: {form_errors}")
+                if formset.non_form_errors():
+                    print(f"  Erreurs non-form: {formset.non_form_errors()}")
+            print("=== FIN ERREURS ===")
+
+            # Ajouter les erreurs aux messages pour l'utilisateur
+            if not form.is_valid():
+                messages.error(request, "Erreurs dans le formulaire principal. Veuillez vérifier les champs.")
+            if not formset.is_valid():
+                messages.error(request, "Erreurs dans les services. Veuillez vérifier les services sélectionnés.")
     else:
         form = InvoiceForm()
         formset = InvoiceItemFormSet()
@@ -587,6 +612,20 @@ def invoice_mark_paid(request, invoice_id):
         return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
 
     return render(request, 'garage_app/invoices/invoice_mark_paid.html', {'invoice': invoice})
+
+
+@login_required
+def invoice_delete(request, invoice_id):
+    """Vue pour supprimer une facture avec confirmation"""
+    invoice = get_object_or_404(Invoice, id=invoice_id)
+
+    if request.method == 'POST':
+        invoice_number = invoice.invoice_number
+        invoice.delete()
+        messages.success(request, f'Facture {invoice_number} supprimée avec succès.')
+        return redirect('garage_app:invoice_list')
+
+    return render(request, 'garage_app/invoices/invoice_delete.html', {'invoice': invoice})
 
 
 @login_required
@@ -700,8 +739,7 @@ def generate_invoice_pdf(request, invoice_id):
 
         items_data.append([
             description,
-            str(item.quantity),
-            f"${item.unit_price:.2f}",
+            f"${item.price:.2f}",
             f"${item.total_price:.2f}"
         ])
 
@@ -1008,7 +1046,7 @@ def financial_reports(request):
     revenue_by_service = paid_invoices.values(
         'invoice_items__service__category'
     ).annotate(
-        total=Sum('invoice_items__unit_price')
+        total=Sum('invoice_items__price')
     ).order_by('-total')
 
     context = {
@@ -1066,6 +1104,42 @@ def get_client_vehicles(request, client_id):
         return JsonResponse({'vehicles': vehicles_data})
 
     except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+def get_services(request):
+    """Vue AJAX pour récupérer tous les services avec leurs prix"""
+    try:
+        services = Service.objects.filter(is_active=True)
+
+        services_data = []
+        for service in services:
+            try:
+                # Gérer le cas où category est une chaîne ou un objet
+                category_name = 'Sans catégorie'
+                if service.category:
+                    if hasattr(service.category, 'name'):
+                        category_name = service.category.name
+                    else:
+                        category_name = str(service.category)
+
+                services_data.append({
+                    'id': service.id,
+                    'name': service.name,
+                    'default_price': float(service.default_price) if service.default_price else 0.0,
+                    'category': category_name,
+                })
+            except Exception as service_error:
+                print(f"Erreur avec le service {service.id}: {service_error}")
+                continue
+
+        return JsonResponse({'services': services_data})
+
+    except Exception as e:
+        print(f"Erreur dans get_services: {e}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=400)
 
 
@@ -1650,8 +1724,9 @@ def inventory_list(request):
     search_query = request.GET.get('search', '')
     category_filter = request.GET.get('category', '')
     supplier_filter = request.GET.get('supplier', '')
+    alert_filter = request.GET.get('alert_filter', '')
 
-    inventory_items = InventoryItem.objects.all()
+    inventory_items = InventoryItem.objects.select_related('supplier').prefetch_related('stock_alerts')
 
     if search_query:
         inventory_items = inventory_items.filter(
@@ -1665,6 +1740,16 @@ def inventory_list(request):
 
     if supplier_filter:
         inventory_items = inventory_items.filter(supplier_id=supplier_filter)
+
+    # Filtrer par type d'alerte
+    if alert_filter == 'needs_reorder':
+        inventory_items = inventory_items.filter(quantity_in_stock__lte=F('reorder_level'))
+    elif alert_filter == 'low_stock':
+        inventory_items = inventory_items.filter(quantity_in_stock__lte=F('minimum_stock_level'))
+    elif alert_filter == 'out_of_stock':
+        inventory_items = inventory_items.filter(quantity_in_stock=0)
+    elif alert_filter == 'active_alerts':
+        inventory_items = inventory_items.filter(stock_alerts__status='active').distinct()
 
     inventory_items = inventory_items.order_by('name')
 
@@ -1682,22 +1767,124 @@ def inventory_list(request):
     total_items = all_items.count()
     total_value = sum(item.quantity_in_stock * item.unit_cost for item in all_items)
     low_stock_items = all_items.filter(quantity_in_stock__lte=F('minimum_stock_level')).count()
+    reorder_items = all_items.filter(quantity_in_stock__lte=F('reorder_level')).count()
+    out_of_stock_items = all_items.filter(quantity_in_stock=0).count()
     total_suppliers = suppliers.count()
+
+    # Statistiques des alertes
+    from .models import StockAlert
+    active_alerts = StockAlert.objects.filter(status='active').count()
+    total_alerts = StockAlert.objects.count()
 
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
         'category_filter': category_filter,
         'supplier_filter': supplier_filter,
+        'alert_filter': alert_filter,
         'categories': categories,
         'suppliers': suppliers,
         'total_items': total_items,
         'total_value': total_value,
         'low_stock_items': low_stock_items,
+        'reorder_items': reorder_items,
+        'out_of_stock_items': out_of_stock_items,
         'total_suppliers': total_suppliers,
+        'active_alerts': active_alerts,
+        'total_alerts': total_alerts,
     }
 
     return render(request, 'garage_app/inventory/inventory_list.html', context)
+
+
+# ==================== VUES POUR LES ALERTES DE STOCK ====================
+
+@login_required
+def stock_alerts_dashboard(request):
+    """Vue pour le tableau de bord des alertes de stock"""
+    from .utils.stock_monitoring import get_stock_alerts_summary, get_items_needing_attention
+
+    # Filtres
+    status_filter = request.GET.get('status', 'active')
+    alert_type_filter = request.GET.get('alert_type', '')
+
+    # Obtenir les alertes
+    alerts = StockAlert.objects.select_related('inventory_item').order_by('-alert_date')
+
+    if status_filter:
+        alerts = alerts.filter(status=status_filter)
+
+    if alert_type_filter:
+        alerts = alerts.filter(alert_type=alert_type_filter)
+
+    # Pagination
+    paginator = Paginator(alerts, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Statistiques
+    summary = get_stock_alerts_summary()
+    items_needing_attention = get_items_needing_attention()
+
+    context = {
+        'page_obj': page_obj,
+        'status_filter': status_filter,
+        'alert_type_filter': alert_type_filter,
+        'summary': summary,
+        'items_needing_attention': items_needing_attention,
+        'alert_type_choices': StockAlert.ALERT_TYPE_CHOICES,
+        'status_choices': StockAlert.STATUS_CHOICES,
+    }
+
+    return render(request, 'garage_app/inventory/stock_alerts_dashboard.html', context)
+
+
+@login_required
+def stock_alert_detail(request, alert_id):
+    """Vue pour les détails d'une alerte de stock"""
+    alert = get_object_or_404(StockAlert, id=alert_id)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        notes = request.POST.get('notes', '')
+        action_taken = request.POST.get('action_taken', '')
+
+        if action == 'acknowledge':
+            alert.acknowledge(notes)
+            messages.success(request, 'Alerte prise en compte avec succès.')
+        elif action == 'resolve':
+            alert.resolve(action_taken)
+            messages.success(request, 'Alerte résolue avec succès.')
+        elif action == 'dismiss':
+            alert.dismiss(notes)
+            messages.success(request, 'Alerte ignorée avec succès.')
+
+        return redirect('garage_app:stock_alerts_dashboard')
+
+    context = {
+        'alert': alert,
+    }
+
+    return render(request, 'garage_app/inventory/stock_alert_detail.html', context)
+
+
+@login_required
+def run_stock_check(request):
+    """Vue pour exécuter la vérification des stocks manuellement"""
+    if request.method == 'POST':
+        from .utils.stock_monitoring import check_all_inventory_stock_alerts
+
+        try:
+            stats = check_all_inventory_stock_alerts()
+            messages.success(
+                request,
+                f'Vérification terminée: {stats["alerts_created"]} nouvelles alertes créées, '
+                f'{stats["alerts_resolved"]} alertes résolues automatiquement.'
+            )
+        except Exception as e:
+            messages.error(request, f'Erreur lors de la vérification: {str(e)}')
+
+    return redirect('garage_app:stock_alerts_dashboard')
 
 
 # ==================== VUES POUR LES BONS DE RÉCEPTION ====================
@@ -1876,3 +2063,182 @@ def get_services_ajax(request):
         })
 
     return JsonResponse({'services': services_data})
+
+
+@login_required
+def get_client_info(request, client_id):
+    """Vue AJAX pour récupérer les informations d'un client (rabais par défaut, etc.)"""
+    try:
+        client = Client.objects.get(id=client_id)
+
+        client_data = {
+            'id': client.id,
+            'name': f"{client.first_name} {client.last_name}",
+            'default_discount_percentage': float(client.default_discount_percentage),
+        }
+
+        return JsonResponse({'client': client_data})
+    except Client.DoesNotExist:
+        return JsonResponse({'client': None})
+
+
+# ==================== GESTION DES SOUMISSIONS ====================
+
+@login_required
+def quote_list(request):
+    """Vue pour lister toutes les soumissions"""
+    search_query = request.GET.get('search', '')
+    status_filter = request.GET.get('status', '')
+
+    quotes = Quote.objects.all()
+
+    if search_query:
+        quotes = quotes.filter(
+            Q(quote_number__icontains=search_query) |
+            Q(client__name__icontains=search_query) |
+            Q(client__email__icontains=search_query)
+        )
+
+    if status_filter:
+        quotes = quotes.filter(status=status_filter)
+
+    # Pagination
+    paginator = Paginator(quotes, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'status_choices': Quote.QUOTE_STATUS_CHOICES,
+    }
+
+    return render(request, 'garage_app/quotes/quote_list.html', context)
+
+
+@login_required
+def quote_detail(request, quote_id):
+    """Vue pour afficher les détails d'une soumission"""
+    quote = get_object_or_404(Quote, id=quote_id)
+    quote_items = quote.quote_items.all()
+
+    context = {
+        'quote': quote,
+        'quote_items': quote_items,
+    }
+
+    return render(request, 'garage_app/quotes/quote_detail.html', context)
+
+
+@login_required
+def quote_create(request):
+    """Vue pour créer une nouvelle soumission"""
+    if request.method == 'POST':
+        form = QuoteForm(request.POST)
+        formset = QuoteItemFormSet(request.POST)
+
+        if form.is_valid() and formset.is_valid():
+            quote = form.save()
+            formset.instance = quote
+            formset.save()
+
+            # Calculer les totaux
+            quote.calculate_totals()
+
+            messages.success(request, f'Soumission {quote.quote_number} créée avec succès.')
+            return redirect('garage_app:quote_detail', quote_id=quote.id)
+        else:
+            # Debug des erreurs
+            print("=== ERREURS DE VALIDATION ===")
+            if not form.is_valid():
+                print(f"Erreurs du formulaire: {form.errors}")
+            if not formset.is_valid():
+                print("Erreurs du formset:")
+                for i, form_errors in enumerate(formset.errors):
+                    if form_errors:
+                        print(f"  Formulaire {i}: {form_errors}")
+            print("=== FIN ERREURS ===")
+    else:
+        form = QuoteForm()
+        formset = QuoteItemFormSet()
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'title': 'Nouvelle soumission',
+    }
+
+    return render(request, 'garage_app/quotes/quote_form.html', context)
+
+
+@login_required
+def quote_update(request, quote_id):
+    """Vue pour modifier une soumission existante"""
+    quote = get_object_or_404(Quote, id=quote_id)
+
+    # Vérifier si la soumission peut être modifiée
+    if quote.status in ['converted', 'accepted']:
+        messages.error(request, 'Cette soumission ne peut plus être modifiée.')
+        return redirect('garage_app:quote_detail', quote_id=quote.id)
+
+    if request.method == 'POST':
+        form = QuoteForm(request.POST, instance=quote)
+        formset = QuoteItemFormSet(request.POST, instance=quote)
+
+        if form.is_valid() and formset.is_valid():
+            quote = form.save()
+            formset.save()
+
+            # Calculer les totaux
+            quote.calculate_totals()
+
+            messages.success(request, f'Soumission {quote.quote_number} modifiée avec succès.')
+            return redirect('garage_app:quote_detail', quote_id=quote.id)
+    else:
+        form = QuoteForm(instance=quote)
+        formset = QuoteItemFormSet(instance=quote)
+
+    context = {
+        'form': form,
+        'formset': formset,
+        'quote': quote,
+        'title': f'Modifier la soumission {quote.quote_number}',
+    }
+
+    return render(request, 'garage_app/quotes/quote_form.html', context)
+
+
+@login_required
+def quote_delete(request, quote_id):
+    """Vue pour supprimer une soumission avec confirmation"""
+    quote = get_object_or_404(Quote, id=quote_id)
+
+    if request.method == 'POST':
+        quote_number = quote.quote_number
+        quote.delete()
+        messages.success(request, f'Soumission {quote_number} supprimée avec succès.')
+        return redirect('garage_app:quote_list')
+
+    return render(request, 'garage_app/quotes/quote_delete.html', {'quote': quote})
+
+
+@login_required
+def quote_convert_to_invoice(request, quote_id):
+    """Vue pour convertir une soumission en facture"""
+    quote = get_object_or_404(Quote, id=quote_id)
+
+    if not quote.can_be_converted():
+        messages.error(request, 'Cette soumission ne peut pas être convertie en facture.')
+        return redirect('garage_app:quote_detail', quote_id=quote.id)
+
+    if request.method == 'POST':
+        try:
+            invoice = quote.convert_to_invoice()
+            messages.success(request, f'Soumission {quote.quote_number} convertie en facture {invoice.invoice_number}.')
+            return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('garage_app:quote_detail', quote_id=quote.id)
+
+    return render(request, 'garage_app/quotes/quote_convert.html', {'quote': quote})

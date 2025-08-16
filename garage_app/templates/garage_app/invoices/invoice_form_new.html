@@ -1,0 +1,20 @@
+{% extends 'garage_app/shared/document_form.html' %}
+
+{% block title %}{{ title }} - MarKev{% endblock %}
+
+<!-- Variables pour le template de base -->
+{% block content %}
+    {% with icon_class="fas fa-file-invoice text-primary" %}
+    {% with subtitle="Créer ou modifier une facture" %}
+    {% with back_url="garage_app:invoice_list" %}
+    {% with items_title="Services et éléments de facture" %}
+    {% with notes_title="Notes internes" %}
+    {% with submit_text=invoice|yesno:"Modifier la facture,Créer la facture" %}
+        {{ block.super }}
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+{% endblock %}

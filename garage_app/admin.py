@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    CompanyProfile, Client, Vehicle, Service, InventoryItem,
+    CompanyProfile, Client, Vehicle, Service, InventoryItem, StockAlert,
     Invoice, InvoiceItem, Expense, FiscalYearArchive,
     Supplier, RecurringExpense, Appointment, StockReceipt, StockReceiptItem
 )
@@ -28,6 +28,7 @@ class CompanyProfileAdmin(admin.ModelAdmin):
     )
 
 
+
 class VehicleInline(admin.TabularInline):
     model = Vehicle
     extra = 0
@@ -48,6 +49,9 @@ class ClientAdmin(admin.ModelAdmin):
         }),
         ('Adresse et notes', {
             'fields': ('address', 'notes')
+        }),
+        ('Rabais', {
+            'fields': ('default_discount_percentage',)
         }),
         ('Métadonnées', {
             'fields': ('created_at', 'updated_at'),
@@ -91,7 +95,7 @@ class SupplierAdmin(admin.ModelAdmin):
 class VehicleAdmin(admin.ModelAdmin):
     list_display = ['__str__', 'client', 'year', 'color', 'license_plate', 'created_at']
     list_filter = ['make', 'year', 'created_at']
-    search_fields = ['make', 'model', 'license_plate', 'vin', 'client__first_name', 'client__last_name']
+    search_fields = ['make', 'model', 'license_plate', 'client__first_name', 'client__last_name']
     readonly_fields = ['created_at', 'updated_at']
 
     fieldsets = (
@@ -99,7 +103,7 @@ class VehicleAdmin(admin.ModelAdmin):
             'fields': ('client', 'make', 'model', 'year', 'color')
         }),
         ('Identification', {
-            'fields': ('license_plate', 'vin')
+            'fields': ('license_plate',)
         }),
         ('Notes', {
             'fields': ('notes',)
@@ -134,17 +138,18 @@ class ServiceAdmin(admin.ModelAdmin):
 
 @admin.register(InventoryItem)
 class InventoryItemAdmin(admin.ModelAdmin):
-    list_display = ['name', 'sku', 'supplier', 'category', 'quantity_in_stock', 'stock_status', 'unit_cost', 'unit_price', 'is_active']
+    list_display = ['name', 'sku', 'supplier', 'category', 'quantity_in_stock', 'stock_status', 'alert_status', 'unit_cost', 'unit_price', 'is_active']
     list_filter = ['supplier', 'category', 'is_active', 'created_at']
     search_fields = ['name', 'sku', 'description', 'supplier__name']
     readonly_fields = ['created_at', 'updated_at', 'total_value']
+    actions = ['check_stock_alerts', 'bulk_update_reorder_levels']
 
     fieldsets = (
         ('Informations de base', {
             'fields': ('name', 'description', 'sku', 'supplier', 'category')
         }),
-        ('Inventaire', {
-            'fields': ('quantity_in_stock', 'minimum_stock_level')
+        ('Inventaire et seuils', {
+            'fields': ('quantity_in_stock', 'minimum_stock_level', 'reorder_level')
         }),
         ('Prix', {
             'fields': ('unit_cost', 'unit_price', 'total_value')
@@ -159,31 +164,135 @@ class InventoryItemAdmin(admin.ModelAdmin):
     )
 
     def stock_status(self, obj):
-        if obj.is_low_stock:
-            return format_html('<span style="color: red;">Stock bas</span>')
-        return format_html('<span style="color: green;">OK</span>')
+        if obj.quantity_in_stock == 0:
+            return format_html('<span style="color: red; font-weight: bold;">🚨 Rupture</span>')
+        elif obj.needs_reorder:
+            return format_html('<span style="color: orange; font-weight: bold;">⚠️ Réappro</span>')
+        elif obj.is_low_stock:
+            return format_html('<span style="color: blue;">📉 Faible</span>')
+        return format_html('<span style="color: green;">✅ OK</span>')
     stock_status.short_description = 'Statut du stock'
+
+    def alert_status(self, obj):
+        active_alerts = obj.stock_alerts.filter(status='active').count()
+        if active_alerts > 0:
+            return format_html('<span style="color: red; font-weight: bold;">{} alerte(s)</span>', active_alerts)
+        return format_html('<span style="color: green;">Aucune</span>')
+    alert_status.short_description = 'Alertes actives'
+
+    def check_stock_alerts(self, request, queryset):
+        """Action pour vérifier les alertes de stock des articles sélectionnés"""
+        alerts_created = 0
+        for item in queryset:
+            new_alerts = item.check_stock_alerts()
+            alerts_created += len(new_alerts)
+
+        self.message_user(request, f'{alerts_created} nouvelle(s) alerte(s) créée(s).')
+    check_stock_alerts.short_description = "Vérifier les alertes de stock"
+
+    def bulk_update_reorder_levels(self, request, queryset):
+        """Action pour mettre à jour les niveaux de réapprovisionnement en lot"""
+        # Cette action pourrait ouvrir une page intermédiaire pour saisir les nouveaux niveaux
+        # Pour l'instant, on affiche juste un message
+        count = queryset.count()
+        self.message_user(request, f'{count} article(s) sélectionné(s). Utilisez le formulaire de modification pour ajuster les niveaux de réapprovisionnement.')
+    bulk_update_reorder_levels.short_description = "Mettre à jour les niveaux de réapprovisionnement"
+
+
+@admin.register(StockAlert)
+class StockAlertAdmin(admin.ModelAdmin):
+    list_display = ['inventory_item', 'alert_type', 'status', 'quantity_at_alert', 'threshold_level', 'alert_date', 'days_since_alert']
+    list_filter = ['alert_type', 'status', 'alert_date', 'inventory_item__category', 'inventory_item__supplier']
+    search_fields = ['inventory_item__name', 'inventory_item__sku', 'notes', 'action_taken']
+    readonly_fields = ['alert_date', 'created_at', 'updated_at', 'days_since_alert']
+    actions = ['bulk_acknowledge', 'bulk_resolve', 'bulk_dismiss']
+    date_hierarchy = 'alert_date'
+
+    fieldsets = (
+        ('Informations de l\'alerte', {
+            'fields': ('inventory_item', 'alert_type', 'status')
+        }),
+        ('Détails du stock', {
+            'fields': ('quantity_at_alert', 'threshold_level')
+        }),
+        ('Dates', {
+            'fields': ('alert_date', 'acknowledged_date', 'resolved_date')
+        }),
+        ('Actions et notes', {
+            'fields': ('notes', 'action_taken')
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at', 'days_since_alert'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def days_since_alert(self, obj):
+        days = obj.days_since_alert
+        if days == 0:
+            return "Aujourd'hui"
+        elif days == 1:
+            return "Hier"
+        else:
+            return f"Il y a {days} jours"
+    days_since_alert.short_description = 'Ancienneté'
+
+    def bulk_acknowledge(self, request, queryset):
+        """Action pour prendre en compte plusieurs alertes"""
+        active_alerts = queryset.filter(status='active')
+        count = 0
+        for alert in active_alerts:
+            alert.acknowledge("Prise en compte en lot depuis l'admin")
+            count += 1
+
+        self.message_user(request, f'{count} alerte(s) prise(s) en compte.')
+    bulk_acknowledge.short_description = "Prendre en compte les alertes sélectionnées"
+
+    def bulk_resolve(self, request, queryset):
+        """Action pour résoudre plusieurs alertes"""
+        resolvable_alerts = queryset.filter(status__in=['active', 'acknowledged'])
+        count = 0
+        for alert in resolvable_alerts:
+            alert.resolve("Résolution en lot depuis l'admin")
+            count += 1
+
+        self.message_user(request, f'{count} alerte(s) résolue(s).')
+    bulk_resolve.short_description = "Résoudre les alertes sélectionnées"
+
+    def bulk_dismiss(self, request, queryset):
+        """Action pour ignorer plusieurs alertes"""
+        active_alerts = queryset.filter(status='active')
+        count = 0
+        for alert in active_alerts:
+            alert.dismiss("Ignorée en lot depuis l'admin")
+            count += 1
+
+        self.message_user(request, f'{count} alerte(s) ignorée(s).')
+    bulk_dismiss.short_description = "Ignorer les alertes sélectionnées"
 
 
 class InvoiceItemInline(admin.TabularInline):
     model = InvoiceItem
     extra = 0
-    fields = ['service', 'description', 'quantity', 'unit_price', 'total_price']
+    fields = ['service', 'description', 'price', 'total_price']
     readonly_fields = ['total_price']
 
 
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ['invoice_number', 'client', 'invoice_date', 'due_date', 'total_amount', 'status', 'payment_method', 'payment_status']
-    list_filter = ['status', 'payment_method', 'invoice_date', 'due_date', 'created_at']
+    list_display = ['invoice_number', 'client', 'invoice_date', 'total_amount', 'status', 'payment_method', 'payment_status']
+    list_filter = ['status', 'payment_method', 'invoice_date', 'created_at']
     search_fields = ['invoice_number', 'client__first_name', 'client__last_name']
-    readonly_fields = ['invoice_number', 'subtotal', 'gst_amount', 'qst_amount', 'total_amount', 'created_at', 'updated_at']
+    readonly_fields = ['invoice_number', 'subtotal', 'discount_amount', 'gst_amount', 'qst_amount', 'total_amount', 'created_at', 'updated_at']
     inlines = [InvoiceItemInline]
 
     fieldsets = (
         ('Informations de base', {
-            'fields': ('invoice_number', 'client', 'vehicle', 'invoice_date', 'due_date')
+            'fields': ('invoice_number', 'client', 'vehicle', 'invoice_date')
+        }),
+        ('Rabais', {
+            'fields': ('discount_percentage', 'is_dealer_discount', 'discount_amount')
         }),
         ('Montants', {
             'fields': ('subtotal', 'gst_amount', 'qst_amount', 'total_amount')
@@ -221,7 +330,7 @@ class InvoiceAdmin(admin.ModelAdmin):
 
 @admin.register(InvoiceItem)
 class InvoiceItemAdmin(admin.ModelAdmin):
-    list_display = ['invoice', 'item_type', 'item_name', 'quantity', 'unit_price', 'total_price']
+    list_display = ['invoice', 'item_type', 'item_name', 'price', 'total_price']
     list_filter = ['item_type', 'service__category', 'inventory_item__category', 'created_at']
     search_fields = ['invoice__invoice_number', 'service__name', 'inventory_item__name', 'description']
     readonly_fields = ['total_price', 'item_name', 'created_at', 'updated_at']
@@ -234,7 +343,7 @@ class InvoiceItemAdmin(admin.ModelAdmin):
             'fields': ('service', 'inventory_item', 'item_name')
         }),
         ('Détails', {
-            'fields': ('description', 'quantity', 'unit_price', 'total_price')
+            'fields': ('description', 'price', 'total_price')
         }),
         ('Métadonnées', {
             'fields': ('created_at', 'updated_at'),

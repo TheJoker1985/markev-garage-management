@@ -172,9 +172,8 @@
                             <tr>
                                 <th>Service</th>
                                 <th>Description</th>
-                                <th style="width: 10%;">Qté</th>
-                                <th style="width: 15%;">Prix unit.</th>
-                                <th style="width: 15%;">Total</th>
+                                <th style="width: 20%;">Prix</th>
+                                <th style="width: 20%;">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -182,8 +181,7 @@
                             <tr>
                                 <td>{{ item.service.name }}</td>
                                 <td>{{ item.description|default:"-" }}</td>
-                                <td class="text-center">{{ item.quantity }}</td>
-                                <td class="text-end">${{ item.unit_price|floatformat:2 }}</td>
+                                <td class="text-end">${{ item.price|floatformat:2 }}</td>
                                 <td class="text-end">${{ item.total_price|floatformat:2 }}</td>
                             </tr>
                             {% endfor %}
@@ -201,10 +199,31 @@
             <div class="col-4">
                 <div class="total-section">
                     <table class="table table-sm mb-0">
+                        <!-- Prix régulier (avant rabais) -->
                         <tr>
-                            <td>Sous-total:</td>
+                            <td>Prix régulier:</td>
                             <td class="text-end">${{ invoice.subtotal|floatformat:2 }}</td>
                         </tr>
+
+                        <!-- Rabais (si applicable) -->
+                        {% if invoice.discount_percentage > 0 or invoice.is_dealer_discount %}
+                        <tr class="text-success">
+                            <td>
+                                {% if invoice.is_dealer_discount %}
+                                    Rabais concessionnaire (30%):
+                                {% else %}
+                                    Rabais ({{ invoice.discount_percentage }}%):
+                                {% endif %}
+                            </td>
+                            <td class="text-end">-${{ invoice.discount_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #dee2e6;">
+                            <td><strong>Sous-total après rabais:</strong></td>
+                            <td class="text-end"><strong>${{ invoice.subtotal_after_discount|floatformat:2 }}</strong></td>
+                        </tr>
+                        {% endif %}
+
+                        <!-- Taxes -->
                         <tr>
                             <td>TPS (5%):</td>
                             <td class="text-end">${{ invoice.gst_amount|floatformat:2 }}</td>
@@ -213,6 +232,8 @@
                             <td>TVQ (9.975%):</td>
                             <td class="text-end">${{ invoice.qst_amount|floatformat:2 }}</td>
                         </tr>
+
+                        <!-- Total final -->
                         <tr style="border-top: 2px solid #2C3E50;">
                             <td><strong>TOTAL:</strong></td>
                             <td class="text-end"><strong>${{ invoice.total_amount|floatformat:2 }}</strong></td>

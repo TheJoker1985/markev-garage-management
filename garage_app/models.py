@@ -98,6 +98,9 @@ class CompanyProfile(models.Model):
             return target_date.year + 1
 
 
+# Modèle Discount supprimé - système simplifié avec pourcentages directs
+
+
 class Client(models.Model):
     """Modèle pour les clients du garage"""
     first_name = models.CharField(max_length=100, verbose_name="Prénom")
@@ -108,6 +111,15 @@ class Client(models.Model):
 
     # Informations supplémentaires
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
+
+    # Rabais par défaut pour ce client (pourcentage simple)
+    default_discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Pourcentage de rabais par défaut (%)",
+        help_text="Rabais automatiquement appliqué aux factures de ce client (0-100%)"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -136,7 +148,6 @@ class Vehicle(models.Model):
     )
     color = models.CharField(max_length=30, blank=True, null=True, verbose_name="Couleur")
     license_plate = models.CharField(max_length=20, blank=True, null=True, verbose_name="Plaque d'immatriculation")
-    vin = models.CharField(max_length=17, blank=True, null=True, verbose_name="Numéro VIN")
 
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
 
@@ -261,6 +272,7 @@ class InventoryItem(models.Model):
     # Quantités et prix
     quantity_in_stock = models.IntegerField(default=0, verbose_name="Quantité en stock")
     minimum_stock_level = models.IntegerField(default=0, verbose_name="Niveau de stock minimum")
+    reorder_level = models.IntegerField(default=0, verbose_name="Niveau de réapprovisionnement")
     unit_cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -302,10 +314,208 @@ class InventoryItem(models.Model):
         return self.quantity_in_stock <= self.minimum_stock_level
 
     @property
+    def needs_reorder(self):
+        """Vérifie si l'article a besoin d'être réapprovisionné"""
+        return self.quantity_in_stock <= self.reorder_level
+
+    @property
     def total_value(self):
         if self.unit_cost is not None:
             return self.quantity_in_stock * self.unit_cost
         return 0
+
+    def check_stock_alerts(self):
+        """Vérifier et créer les alertes de stock nécessaires"""
+        alerts_created = []
+
+        # Vérifier si une alerte de réapprovisionnement est nécessaire
+        if self.needs_reorder:
+            alert, created = self.create_or_update_alert('reorder', self.reorder_level)
+            if created:
+                alerts_created.append(alert)
+
+        # Vérifier si une alerte de stock faible est nécessaire
+        if self.is_low_stock:
+            alert, created = self.create_or_update_alert('low_stock', self.minimum_stock_level)
+            if created:
+                alerts_created.append(alert)
+
+        # Vérifier si une alerte de rupture de stock est nécessaire
+        if self.quantity_in_stock == 0:
+            alert, created = self.create_or_update_alert('out_of_stock', 0)
+            if created:
+                alerts_created.append(alert)
+
+        return alerts_created
+
+    def create_or_update_alert(self, alert_type, threshold_level):
+        """Créer ou mettre à jour une alerte de stock"""
+        # Vérifier s'il existe déjà une alerte active de ce type
+        existing_alert = self.stock_alerts.filter(
+            alert_type=alert_type,
+            status='active'
+        ).first()
+
+        if existing_alert:
+            # Mettre à jour l'alerte existante
+            existing_alert.quantity_at_alert = self.quantity_in_stock
+            existing_alert.threshold_level = threshold_level
+            existing_alert.save()
+            return existing_alert, False
+        else:
+            # Créer une nouvelle alerte
+            # StockAlert sera défini plus bas dans ce même fichier
+            alert = StockAlert.objects.create(
+                inventory_item=self,
+                alert_type=alert_type,
+                quantity_at_alert=self.quantity_in_stock,
+                threshold_level=threshold_level
+            )
+            return alert, True
+
+    def resolve_alerts_if_stock_sufficient(self):
+        """Résoudre automatiquement les alertes si le stock est suffisant"""
+        resolved_alerts = []
+
+        # Résoudre les alertes de réapprovisionnement si le stock est au-dessus du seuil
+        if self.quantity_in_stock > self.reorder_level:
+            reorder_alerts = self.stock_alerts.filter(
+                alert_type='reorder',
+                status='active'
+            )
+            for alert in reorder_alerts:
+                alert.resolve("Stock réapprovisionné automatiquement")
+                resolved_alerts.append(alert)
+
+        # Résoudre les alertes de stock faible si le stock est au-dessus du minimum
+        if self.quantity_in_stock > self.minimum_stock_level:
+            low_stock_alerts = self.stock_alerts.filter(
+                alert_type='low_stock',
+                status='active'
+            )
+            for alert in low_stock_alerts:
+                alert.resolve("Stock reconstitué automatiquement")
+                resolved_alerts.append(alert)
+
+        # Résoudre les alertes de rupture de stock si il y a du stock
+        if self.quantity_in_stock > 0:
+            out_of_stock_alerts = self.stock_alerts.filter(
+                alert_type='out_of_stock',
+                status='active'
+            )
+            for alert in out_of_stock_alerts:
+                alert.resolve("Stock reconstitué automatiquement")
+                resolved_alerts.append(alert)
+
+        return resolved_alerts
+
+    def save(self, *args, **kwargs):
+        """Override save pour vérifier automatiquement les alertes de stock"""
+        # Sauvegarder d'abord l'objet
+        super().save(*args, **kwargs)
+
+        # Puis vérifier les alertes de stock
+        self.resolve_alerts_if_stock_sufficient()
+        self.check_stock_alerts()
+
+
+class StockAlert(models.Model):
+    """Modèle pour les alertes de réapprovisionnement automatiques"""
+    inventory_item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.CASCADE,
+        related_name='stock_alerts',
+        verbose_name="Article d'inventaire"
+    )
+
+    # Type d'alerte
+    ALERT_TYPE_CHOICES = [
+        ('reorder', 'Réapprovisionnement'),
+        ('low_stock', 'Stock faible'),
+        ('out_of_stock', 'Rupture de stock'),
+    ]
+    alert_type = models.CharField(
+        max_length=20,
+        choices=ALERT_TYPE_CHOICES,
+        default='reorder',
+        verbose_name="Type d'alerte"
+    )
+
+    # Statut de l'alerte
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('acknowledged', 'Prise en compte'),
+        ('resolved', 'Résolue'),
+        ('dismissed', 'Ignorée'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='active',
+        verbose_name="Statut"
+    )
+
+    # Informations sur l'alerte
+    alert_date = models.DateTimeField(auto_now_add=True, verbose_name="Date de l'alerte")
+    acknowledged_date = models.DateTimeField(null=True, blank=True, verbose_name="Date de prise en compte")
+    resolved_date = models.DateTimeField(null=True, blank=True, verbose_name="Date de résolution")
+
+    # Quantités au moment de l'alerte
+    quantity_at_alert = models.IntegerField(verbose_name="Quantité au moment de l'alerte")
+    threshold_level = models.IntegerField(verbose_name="Seuil déclenché")
+
+    # Notes et actions
+    notes = models.TextField(blank=True, null=True, verbose_name="Notes")
+    action_taken = models.TextField(blank=True, null=True, verbose_name="Action entreprise")
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Alerte de stock"
+        verbose_name_plural = "Alertes de stock"
+        ordering = ['-alert_date']
+        unique_together = ['inventory_item', 'alert_type', 'status']
+
+    def __str__(self):
+        return f"Alerte {self.get_alert_type_display()} - {self.inventory_item.name} ({self.get_status_display()})"
+
+    def acknowledge(self, notes=None):
+        """Marquer l'alerte comme prise en compte"""
+        from django.utils import timezone
+        self.status = 'acknowledged'
+        self.acknowledged_date = timezone.now()
+        if notes:
+            self.notes = notes
+        self.save()
+
+    def resolve(self, action_taken=None):
+        """Marquer l'alerte comme résolue"""
+        from django.utils import timezone
+        self.status = 'resolved'
+        self.resolved_date = timezone.now()
+        if action_taken:
+            self.action_taken = action_taken
+        self.save()
+
+    def dismiss(self, notes=None):
+        """Ignorer l'alerte"""
+        self.status = 'dismissed'
+        if notes:
+            self.notes = notes
+        self.save()
+
+    @property
+    def is_active(self):
+        """Vérifie si l'alerte est encore active"""
+        return self.status == 'active'
+
+    @property
+    def days_since_alert(self):
+        """Nombre de jours depuis la création de l'alerte"""
+        from django.utils import timezone
+        return (timezone.now() - self.alert_date).days
 
 
 class Invoice(models.Model):
@@ -319,7 +529,6 @@ class Invoice(models.Model):
 
     # Dates
     invoice_date = models.DateField(verbose_name="Date de facture")
-    due_date = models.DateField(verbose_name="Date d'échéance")
 
     # Montants
     subtotal = models.DecimalField(
@@ -345,6 +554,24 @@ class Invoice(models.Model):
         decimal_places=2,
         default=Decimal('0.00'),
         verbose_name="Montant total"
+    )
+
+    # Rabais simplifié
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Pourcentage de rabais (%)"
+    )
+    discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Montant du rabais"
+    )
+    is_dealer_discount = models.BooleanField(
+        default=False,
+        verbose_name="Rabais concessionnaire (30%)"
     )
 
     # Statut
@@ -413,32 +640,73 @@ class Invoice(models.Model):
 
             self.invoice_number = f"INV-{year}-{new_number:04d}"
 
+        # Appliquer le rabais par défaut du client lors de la création
+        if not self.pk and self.client:  # Nouvelle facture
+            if (self.discount_percentage == Decimal('0.00') and
+                not self.is_dealer_discount and
+                self.client.default_discount_percentage > Decimal('0.00')):
+                self.discount_percentage = self.client.default_discount_percentage
+
         super().save(*args, **kwargs)
 
     def calculate_totals(self):
         """Calculer les totaux de la facture"""
         self.subtotal = sum(item.total_price for item in self.invoice_items.all())
 
-        # Calculer les taxes si l'entreprise est enregistrée
-        company_profile = CompanyProfile.objects.first()
-        if company_profile and company_profile.is_tax_registered:
-            self.gst_amount = self.subtotal * Decimal('0.05')  # TPS 5%
-            self.qst_amount = self.subtotal * Decimal('0.09975')  # TVQ 9.975%
-        else:
-            self.gst_amount = Decimal('0.00')
-            self.qst_amount = Decimal('0.00')
+        # Calculer le rabais selon la logique simplifiée
+        if self.is_dealer_discount:
+            # Rabais concessionnaire : 30%
+            self.discount_percentage = Decimal('30.00')
+        # Si pas de rabais concessionnaire, utiliser le pourcentage manuel ou par défaut du client
+        elif self.discount_percentage == Decimal('0.00') and self.client.default_discount_percentage > Decimal('0.00'):
+            # Appliquer le rabais par défaut du client si aucun rabais manuel
+            self.discount_percentage = self.client.default_discount_percentage
 
-        self.total_amount = self.subtotal + self.gst_amount + self.qst_amount
+        # Calculer le montant du rabais
+        self.discount_amount = self.subtotal * (self.discount_percentage / Decimal('100'))
+
+        # Sous-total après rabais (base pour le calcul des taxes)
+        subtotal_after_discount = self.subtotal - self.discount_amount
+
+        # Calculer les taxes (toujours calculées au Québec)
+        # TPS (GST) : 5%
+        # TVQ (QST) : 9.975%
+        self.gst_amount = subtotal_after_discount * Decimal('0.05')  # TPS 5%
+        self.qst_amount = subtotal_after_discount * Decimal('0.09975')  # TVQ 9.975%
+
+        self.total_amount = subtotal_after_discount + self.gst_amount + self.qst_amount
         self.save()
+
+    @property
+    def subtotal_after_discount(self):
+        """Sous-total après application du rabais"""
+        return self.subtotal - self.discount_amount
 
     @property
     def is_paid(self):
         return self.status == 'paid'
 
+# Propriété is_overdue supprimée car plus de date d'échéance
+
+    def apply_client_default_discount(self):
+        """Appliquer le rabais par défaut du client si aucun rabais n'est déjà appliqué"""
+        if (self.discount_percentage == Decimal('0.00') and
+            not self.is_dealer_discount and
+            self.client.default_discount_percentage > Decimal('0.00')):
+            self.discount_percentage = self.client.default_discount_percentage
+            self.save()
+
+    def force_apply_client_default_discount(self):
+        """Forcer l'application du rabais par défaut du client (même si un rabais existe déjà)"""
+        if (not self.is_dealer_discount and
+            self.client.default_discount_percentage > Decimal('0.00')):
+            self.discount_percentage = self.client.default_discount_percentage
+            self.save()
+
     @property
-    def is_overdue(self):
-        from datetime import date
-        return self.due_date < date.today() and self.status not in ['paid', 'cancelled']
+    def subtotal_after_discount(self):
+        """Sous-total après application du rabais"""
+        return self.subtotal - self.discount_amount
 
 
 class InvoiceItem(models.Model):
@@ -475,18 +743,12 @@ class InvoiceItem(models.Model):
 
     # Détails de l'élément
     description = models.TextField(blank=True, null=True, verbose_name="Description personnalisée")
-    quantity = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('1.00'),
-        validators=[MinValueValidator(Decimal('0.01'))],
-        verbose_name="Quantité"
-    )
-    unit_price = models.DecimalField(
+    # Quantité supprimée - un seul service par ligne de facture
+    price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        verbose_name="Prix unitaire"
+        verbose_name="Prix"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -506,9 +768,8 @@ class InvoiceItem(models.Model):
 
     @property
     def total_price(self):
-        if self.unit_price is not None:
-            return self.quantity * self.unit_price
-        return Decimal('0.00')
+        """Le prix total est simplement le prix (pas de quantité)"""
+        return self.price if self.price is not None else Decimal('0.00')
 
     @property
     def item_name(self):
@@ -523,19 +784,22 @@ class InvoiceItem(models.Model):
         # Validation : s'assurer qu'un seul type d'élément est défini
         if self.item_type == 'service':
             self.inventory_item = None
-            if not self.unit_price and self.service:
-                self.unit_price = self.service.default_price
+            # Appliquer automatiquement le prix du service si pas encore défini
+            if not self.price and self.service:
+                self.price = self.service.default_price
         elif self.item_type == 'inventory':
             self.service = None
-            if not self.unit_price and self.inventory_item:
-                self.unit_price = self.inventory_item.unit_price
+            # Appliquer automatiquement le prix de l'article si pas encore défini
+            if not self.price and self.inventory_item:
+                self.price = self.inventory_item.unit_price
 
         super().save(*args, **kwargs)
 
         # Décrémenter le stock si c'est un article d'inventaire et que la facture est finalisée
+        # Note: Plus de quantité, donc on décrémente de 1
         if (self.item_type == 'inventory' and self.inventory_item and
             self.invoice.status in ['sent', 'paid']):
-            self.inventory_item.quantity_in_stock -= int(self.quantity)
+            self.inventory_item.quantity_in_stock -= 1
             self.inventory_item.save()
 
         # Recalculer les totaux de la facture
@@ -1225,7 +1489,6 @@ class Appointment(models.Model):
             client=self.client,
             vehicle=self.vehicle,
             invoice_date=date.today(),
-            due_date=date.today() + timedelta(days=30),
             notes=f"Facture créée depuis le rendez-vous: {self.title}"
         )
 
@@ -1245,5 +1508,211 @@ class Appointment(models.Model):
         # Lier la facture au rendez-vous
         self.invoice = invoice
         self.save()
+
+
+# ==================== GESTION DES SOUMISSIONS ====================
+
+class Quote(models.Model):
+    """Modèle pour les soumissions/devis"""
+
+    QUOTE_STATUS_CHOICES = [
+        ('draft', 'Brouillon'),
+        ('sent', 'Envoyée'),
+        ('accepted', 'Acceptée'),
+        ('rejected', 'Refusée'),
+        ('expired', 'Expirée'),
+        ('converted', 'Convertie en facture'),
+    ]
+
+    # Informations de base
+    quote_number = models.CharField(max_length=20, unique=True, verbose_name="Numéro de soumission")
+    date = models.DateField(default=date.today, verbose_name="Date de création")
+    valid_until = models.DateField(verbose_name="Valide jusqu'au")
+    status = models.CharField(max_length=20, choices=QUOTE_STATUS_CHOICES, default='draft', verbose_name="Statut")
+
+    # Relations
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='quotes', verbose_name="Client")
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes', verbose_name="Véhicule")
+
+    # Montants
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="Sous-total")
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'), verbose_name="Pourcentage de rabais")
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="Montant du rabais")
+    is_dealer_discount = models.BooleanField(default=False, verbose_name="Rabais concessionnaire")
+    gst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="Montant TPS")
+    qst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="Montant TVQ")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="Montant total")
+
+    # Informations supplémentaires
+    notes = models.TextField(blank=True, null=True, verbose_name="Notes internes")
+    terms_conditions = models.TextField(blank=True, null=True, verbose_name="Conditions générales")
+
+    # Conversion
+    converted_invoice = models.OneToOneField('Invoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='source_quote', verbose_name="Facture convertie")
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
+
+    class Meta:
+        verbose_name = "Soumission"
+        verbose_name_plural = "Soumissions"
+        ordering = ['-date', '-quote_number']
+
+    def __str__(self):
+        return f"{self.quote_number} - {self.client.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.quote_number:
+            # Générer le numéro de soumission automatiquement
+            today = date.today()
+            existing_quotes = Quote.objects.filter(
+                quote_number__startswith=f'QUO-{today.year}'
+            ).count()
+            new_num = existing_quotes + 1
+            self.quote_number = f'QUO-{today.year}-{new_num:04d}'
+
+        # Définir la date de validité par défaut (30 jours)
+        if not self.valid_until:
+            self.valid_until = self.date + timedelta(days=30)
+
+        # Appliquer le rabais par défaut du client si aucun rabais n'est défini
+        if (not self.is_dealer_discount and
+            self.discount_percentage == Decimal('0.00') and
+            self.client and
+            self.client.default_discount_percentage > Decimal('0.00')):
+            self.discount_percentage = self.client.default_discount_percentage
+
+        super().save(*args, **kwargs)
+
+    def calculate_totals(self):
+        """Calculer les totaux de la soumission"""
+        self.subtotal = sum(item.total_price for item in self.quote_items.all())
+
+        # Calculer le rabais selon la logique simplifiée
+        if self.is_dealer_discount:
+            # Rabais concessionnaire : 30%
+            self.discount_percentage = Decimal('30.00')
+        # Si pas de rabais concessionnaire, utiliser le pourcentage manuel ou par défaut du client
+        elif self.discount_percentage == Decimal('0.00') and self.client.default_discount_percentage > Decimal('0.00'):
+            # Appliquer le rabais par défaut du client si aucun rabais manuel
+            self.discount_percentage = self.client.default_discount_percentage
+
+        # Calculer le montant du rabais
+        self.discount_amount = self.subtotal * (self.discount_percentage / Decimal('100'))
+
+        # Sous-total après rabais (base pour le calcul des taxes)
+        subtotal_after_discount = self.subtotal - self.discount_amount
+
+        # Calculer les taxes (toujours calculées au Québec)
+        # TPS (GST) : 5%
+        # TVQ (QST) : 9.975%
+        self.gst_amount = subtotal_after_discount * Decimal('0.05')  # TPS 5%
+        self.qst_amount = subtotal_after_discount * Decimal('0.09975')  # TVQ 9.975%
+
+        self.total_amount = subtotal_after_discount + self.gst_amount + self.qst_amount
+        self.save()
+
+    @property
+    def subtotal_after_discount(self):
+        """Sous-total après application du rabais"""
+        return self.subtotal - self.discount_amount
+
+    @property
+    def is_expired(self):
+        """Vérifier si la soumission est expirée"""
+        return date.today() > self.valid_until and self.status not in ['accepted', 'converted', 'rejected']
+
+    def can_be_converted(self):
+        """Vérifier si la soumission peut être convertie en facture"""
+        return self.status in ['sent', 'accepted'] and not self.converted_invoice
+
+    def convert_to_invoice(self):
+        """Convertir la soumission en facture"""
+        if not self.can_be_converted():
+            raise ValueError("Cette soumission ne peut pas être convertie en facture")
+
+        # Créer la facture
+        invoice = Invoice.objects.create(
+            client=self.client,
+            vehicle=self.vehicle,
+            discount_percentage=self.discount_percentage,
+            is_dealer_discount=self.is_dealer_discount,
+            notes=self.notes
+        )
+
+        # Copier tous les éléments de la soumission vers la facture
+        for quote_item in self.quote_items.all():
+            InvoiceItem.objects.create(
+                invoice=invoice,
+                item_type=quote_item.item_type,
+                service=quote_item.service,
+                inventory_item=quote_item.inventory_item,
+                description=quote_item.description,
+                price=quote_item.price
+            )
+
+        # Calculer les totaux de la facture
+        invoice.calculate_totals()
+
+        # Marquer la soumission comme convertie
+        self.status = 'converted'
+        self.converted_invoice = invoice
+        self.save()
+
+        return invoice
+
+
+class QuoteItem(models.Model):
+    """Modèle pour les éléments d'une soumission"""
+
+    ITEM_TYPE_CHOICES = [
+        ('service', 'Service'),
+        ('inventory', 'Article d\'inventaire'),
+    ]
+
+    # Relations
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='quote_items', verbose_name="Soumission")
+    item_type = models.CharField(max_length=20, choices=ITEM_TYPE_CHOICES, default='service', verbose_name="Type d'élément")
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Service")
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, null=True, blank=True, verbose_name="Article d'inventaire")
+
+    # Détails
+    description = models.TextField(blank=True, null=True, verbose_name="Description personnalisée")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Prix")
+
+    # Métadonnées
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
+
+    class Meta:
+        verbose_name = "Élément de soumission"
+        verbose_name_plural = "Éléments de soumission"
+        ordering = ['id']
+
+    def __str__(self):
+        if self.service:
+            return f"{self.service.name} - {self.quote.quote_number}"
+        elif self.inventory_item:
+            return f"{self.inventory_item.name} - {self.quote.quote_number}"
+        return f"Élément personnalisé - {self.quote.quote_number}"
+
+    @property
+    def total_price(self):
+        """Le prix total est simplement le prix (pas de quantité)"""
+        return self.price if self.price is not None else Decimal('0.00')
+
+    def save(self, *args, **kwargs):
+        # Auto-remplir le prix selon le type d'élément
+        if self.service and not self.price:
+            self.price = self.service.default_price
+        elif self.inventory_item and not self.price:
+            self.price = self.inventory_item.selling_price
+
+        super().save(*args, **kwargs)
+
+        # Recalculer les totaux de la soumission
+        if self.quote_id:
+            self.quote.calculate_totals()
 
         return invoice

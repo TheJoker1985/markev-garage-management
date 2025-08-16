@@ -1,0 +1,225 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Détail Alerte - {{ alert.inventory_item.name }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>🔔 Détail de l'alerte</h1>
+            <div>
+                <a href="{% url 'garage_app:stock_alerts_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour aux alertes
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Informations de l'alerte -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Informations de l'alerte</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Article concerné</h6>
+                        <p><strong>{{ alert.inventory_item.name }}</strong></p>
+                        <p class="text-muted">SKU: {{ alert.inventory_item.sku }}</p>
+                        {% if alert.inventory_item.description %}
+                            <p class="text-muted">{{ alert.inventory_item.description }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Type d'alerte</h6>
+                        {% if alert.alert_type == 'out_of_stock' %}
+                            <span class="badge bg-danger fs-6">🚨 {{ alert.get_alert_type_display }}</span>
+                        {% elif alert.alert_type == 'reorder' %}
+                            <span class="badge bg-warning fs-6">⚠️ {{ alert.get_alert_type_display }}</span>
+                        {% elif alert.alert_type == 'low_stock' %}
+                            <span class="badge bg-info fs-6">📉 {{ alert.get_alert_type_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="row">
+                    <div class="col-md-3">
+                        <h6>Stock actuel</h6>
+                        <p class="fs-4 mb-0">
+                            <strong>{{ alert.inventory_item.quantity_in_stock }}</strong>
+                        </p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Stock au moment de l'alerte</h6>
+                        <p class="fs-4 mb-0">
+                            <strong>{{ alert.quantity_at_alert }}</strong>
+                        </p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Seuil déclenché</h6>
+                        <p class="fs-4 mb-0">
+                            <strong>{{ alert.threshold_level }}</strong>
+                        </p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6>Statut</h6>
+                        {% if alert.status == 'active' %}
+                            <span class="badge bg-danger fs-6">{{ alert.get_status_display }}</span>
+                        {% elif alert.status == 'acknowledged' %}
+                            <span class="badge bg-warning fs-6">{{ alert.get_status_display }}</span>
+                        {% elif alert.status == 'resolved' %}
+                            <span class="badge bg-success fs-6">{{ alert.get_status_display }}</span>
+                        {% elif alert.status == 'dismissed' %}
+                            <span class="badge bg-secondary fs-6">{{ alert.get_status_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Date de création</h6>
+                        <p>{{ alert.alert_date|date:"d/m/Y H:i" }}</p>
+                        <small class="text-muted">Il y a {{ alert.days_since_alert }} jour(s)</small>
+                    </div>
+                    {% if alert.acknowledged_date %}
+                    <div class="col-md-4">
+                        <h6>Date de prise en compte</h6>
+                        <p>{{ alert.acknowledged_date|date:"d/m/Y H:i" }}</p>
+                    </div>
+                    {% endif %}
+                    {% if alert.resolved_date %}
+                    <div class="col-md-4">
+                        <h6>Date de résolution</h6>
+                        <p>{{ alert.resolved_date|date:"d/m/Y H:i" }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if alert.notes %}
+                <hr>
+                <h6>Notes</h6>
+                <p>{{ alert.notes }}</p>
+                {% endif %}
+                
+                {% if alert.action_taken %}
+                <hr>
+                <h6>Action entreprise</h6>
+                <p>{{ alert.action_taken }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Actions -->
+        {% if alert.status == 'active' or alert.status == 'acknowledged' %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Actions</h5>
+            </div>
+            <div class="card-body">
+                {% if alert.status == 'active' %}
+                <!-- Prendre en compte -->
+                <form method="post" class="mb-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="acknowledge">
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (optionnel)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                  placeholder="Ajoutez des notes sur cette alerte..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="fas fa-check me-2"></i>Prendre en compte
+                    </button>
+                </form>
+                {% endif %}
+                
+                <!-- Résoudre -->
+                <form method="post" class="mb-3">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="resolve">
+                    <div class="mb-3">
+                        <label for="action_taken" class="form-label">Action entreprise</label>
+                        <textarea class="form-control" id="action_taken" name="action_taken" rows="3" 
+                                  placeholder="Décrivez l'action entreprise pour résoudre cette alerte..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-check-circle me-2"></i>Marquer comme résolue
+                    </button>
+                </form>
+                
+                {% if alert.status == 'active' %}
+                <!-- Ignorer -->
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="dismiss">
+                    <div class="mb-3">
+                        <label for="dismiss_notes" class="form-label">Raison (optionnel)</label>
+                        <textarea class="form-control" id="dismiss_notes" name="notes" rows="2" 
+                                  placeholder="Pourquoi ignorer cette alerte..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-outline-secondary w-100" 
+                            onclick="return confirm('Êtes-vous sûr de vouloir ignorer cette alerte ?')">
+                        <i class="fas fa-times me-2"></i>Ignorer l'alerte
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Informations sur l'article -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Informations sur l'article</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6>Fournisseur</h6>
+                    {% if alert.inventory_item.supplier %}
+                        <p>{{ alert.inventory_item.supplier.name }}</p>
+                    {% else %}
+                        <p class="text-muted">Non défini</p>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Catégorie</h6>
+                    <span class="badge bg-secondary">{{ alert.inventory_item.get_category_display }}</span>
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Seuils configurés</h6>
+                    <ul class="list-unstyled">
+                        <li>Minimum: <strong>{{ alert.inventory_item.minimum_stock_level }}</strong></li>
+                        <li>Réapprovisionnement: <strong>{{ alert.inventory_item.reorder_level }}</strong></li>
+                    </ul>
+                </div>
+                
+                <div class="mb-3">
+                    <h6>Prix</h6>
+                    <ul class="list-unstyled">
+                        <li>Coût: <strong>${{ alert.inventory_item.unit_cost|floatformat:2 }}</strong></li>
+                        <li>Vente: <strong>${{ alert.inventory_item.unit_price|floatformat:2 }}</strong></li>
+                    </ul>
+                </div>
+                
+                <div class="d-grid">
+                    <a href="{% url 'admin:garage_app_inventoryitem_change' alert.inventory_item.id %}" 
+                       class="btn btn-outline-primary">
+                        <i class="fas fa-edit me-2"></i>Modifier l'article
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

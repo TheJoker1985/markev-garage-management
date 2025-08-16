@@ -64,16 +64,7 @@
                             {% endif %}
                         </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.vin.id_for_label }}" class="form-label">{{ form.vin.label }}</label>
-                        {{ form.vin }}
-                        {% if form.vin.errors %}
-                            <div class="text-danger">{{ form.vin.errors }}</div>
-                        {% endif %}
-                        <div class="form-text">Numéro d'identification du véhicule (17 caractères)</div>
-                    </div>
-                    
+
                     <div class="mb-3">
                         <label for="{{ form.notes.id_for_label }}" class="form-label">{{ form.notes.label }}</label>
                         {{ form.notes }}
@@ -106,7 +97,6 @@
                 <p><strong>Conseils:</strong></p>
                 <ul class="small">
                     <li>La plaque d'immatriculation aide à identifier rapidement le véhicule</li>
-                    <li>Le numéro VIN est utile pour les pièces et l'historique</li>
                     <li>Utilisez les notes pour des informations spéciales (modifications, etc.)</li>
                 </ul>
             </div>

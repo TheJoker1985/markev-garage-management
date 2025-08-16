@@ -2,7 +2,8 @@ from django import forms
 from django.forms import inlineformset_factory
 from .models import (
     CompanyProfile, Client, Vehicle, Service, Invoice, InvoiceItem, Expense,
-    Supplier, RecurringExpense, Appointment, InventoryItem, StockReceipt, StockReceiptItem
+    Supplier, RecurringExpense, Appointment, InventoryItem, StockReceipt, StockReceiptItem,
+    Quote, QuoteItem
 )
 from datetime import date, timedelta, datetime
 
@@ -62,7 +63,7 @@ class ClientForm(forms.ModelForm):
 
     class Meta:
         model = Client
-        fields = ['first_name', 'last_name', 'email', 'phone', 'address', 'notes']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'address', 'notes', 'default_discount_percentage']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Prénom'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Nom de famille'}),
@@ -70,6 +71,13 @@ class ClientForm(forms.ModelForm):
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '(514) 123-4567'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Adresse complète'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes sur le client'}),
+            'default_discount_percentage': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': '0.00',
+                'min': '0',
+                'max': '100',
+                'step': '0.01'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -94,7 +102,7 @@ class VehicleForm(forms.ModelForm):
 
     class Meta:
         model = Vehicle
-        fields = ['client', 'make', 'model', 'year', 'color', 'license_plate', 'vin', 'notes']
+        fields = ['client', 'make', 'model', 'year', 'color', 'license_plate', 'notes']
         widgets = {
             'client': forms.Select(attrs={'class': 'form-select'}),
             'make': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Toyota, Honda, etc.'}),
@@ -102,7 +110,6 @@ class VehicleForm(forms.ModelForm):
             'year': forms.NumberInput(attrs={'class': 'form-control', 'min': 1900, 'max': 2030}),
             'color': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Noir, Blanc, etc.'}),
             'license_plate': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ABC 123'}),
-            'vin': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '17 caractères'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
@@ -122,7 +129,6 @@ class VehicleForm(forms.ModelForm):
         self.fields['year'].label = 'Année'
         self.fields['color'].label = 'Couleur'
         self.fields['license_plate'].label = 'Plaque d\'immatriculation'
-        self.fields['vin'].label = 'Numéro VIN'
         self.fields['notes'].label = 'Notes'
 
 
@@ -158,14 +164,39 @@ class ServiceForm(forms.ModelForm):
 class InvoiceForm(forms.ModelForm):
     """Formulaire pour la création et modification de factures"""
 
+    # Choix de pourcentages prédéfinis
+    DISCOUNT_CHOICES = [
+        ('', 'Aucun rabais'),
+        ('5.00', '5%'),
+        ('10.00', '10%'),
+        ('15.00', '15%'),
+        ('20.00', '20%'),
+        ('25.00', '25%'),
+        ('30.00', '30%'),
+        ('35.00', '35%'),
+        ('40.00', '40%'),
+    ]
+
+    discount_percentage = forms.ChoiceField(
+        choices=DISCOUNT_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_discount_percentage'}),
+        label='Rabais'
+    )
+
+    is_dealer_discount = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_is_dealer_discount'}),
+        label='Rabais Concessionnaire (30%)'
+    )
+
     class Meta:
         model = Invoice
-        fields = ['client', 'vehicle', 'invoice_date', 'due_date', 'payment_method', 'notes']
+        fields = ['client', 'vehicle', 'invoice_date', 'payment_method', 'notes', 'discount_percentage', 'is_dealer_discount']
         widgets = {
             'client': forms.Select(attrs={'class': 'form-select'}),
             'vehicle': forms.Select(attrs={'class': 'form-select'}),
             'invoice_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes sur la facture'}),
         }
 
@@ -175,29 +206,45 @@ class InvoiceForm(forms.ModelForm):
         # Champs obligatoires
         self.fields['client'].required = True
         self.fields['invoice_date'].required = True
-        self.fields['due_date'].required = True
 
         # Labels en français
         self.fields['client'].label = 'Client'
         self.fields['vehicle'].label = 'Véhicule (optionnel)'
         self.fields['invoice_date'].label = 'Date de facture'
-        self.fields['due_date'].label = 'Date d\'échéance'
         self.fields['notes'].label = 'Notes'
 
         # Valeurs par défaut
         if not self.instance.pk:  # Nouvelle facture
             self.fields['invoice_date'].initial = date.today()
-            self.fields['due_date'].initial = date.today() + timedelta(days=30)
+        else:
+            # Pour une facture existante, initialiser les champs de rabais
+            if self.instance.discount_percentage:
+                self.fields['discount_percentage'].initial = str(self.instance.discount_percentage)
+            self.fields['is_dealer_discount'].initial = self.instance.is_dealer_discount
 
         # Filtrer les véhicules selon le client sélectionné
-        if 'client' in self.data:
+        client_id = None
+
+        # Récupérer l'ID du client depuis les données POST ou l'instance
+        if self.data and 'client' in self.data:
             try:
                 client_id = int(self.data.get('client'))
-                self.fields['vehicle'].queryset = Vehicle.objects.filter(client_id=client_id)
             except (ValueError, TypeError):
-                self.fields['vehicle'].queryset = Vehicle.objects.none()
+                client_id = None
         elif self.instance.pk and self.instance.client:
-            self.fields['vehicle'].queryset = self.instance.client.vehicles.all()
+            client_id = self.instance.client.id
+
+        # Filtrer les véhicules selon le client
+        if client_id:
+            self.fields['vehicle'].queryset = Vehicle.objects.filter(client_id=client_id)
+            # Maintenir la sélection du véhicule si elle existe dans les données
+            if self.data and 'vehicle' in self.data:
+                try:
+                    vehicle_id = int(self.data.get('vehicle'))
+                    if Vehicle.objects.filter(id=vehicle_id, client_id=client_id).exists():
+                        self.fields['vehicle'].initial = vehicle_id
+                except (ValueError, TypeError):
+                    pass
         else:
             self.fields['vehicle'].queryset = Vehicle.objects.none()
 
@@ -207,21 +254,30 @@ class InvoiceItemForm(forms.ModelForm):
 
     class Meta:
         model = InvoiceItem
-        fields = ['item_type', 'service', 'inventory_item', 'description', 'quantity', 'unit_price']
+        fields = ['item_type', 'service', 'inventory_item', 'description', 'price']
         widgets = {
-            'item_type': forms.Select(attrs={'class': 'form-select'}),
+            'item_type': forms.HiddenInput(),  # Champ caché avec valeur par défaut
             'service': forms.Select(attrs={'class': 'form-select'}),
             'inventory_item': forms.Select(attrs={'class': 'form-select'}),
             'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description personnalisée'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
-            'unit_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Filtrer les articles d'inventaire actifs
-        self.fields['inventory_item'].queryset = InventoryItem.objects.filter(is_active=True)
-        self.fields['service'].queryset = Service.objects.filter(is_active=True)
+    def clean(self):
+        cleaned_data = super().clean()
+        service = cleaned_data.get('service')
+        inventory_item = cleaned_data.get('inventory_item')
+        price = cleaned_data.get('price')
+
+        # Si aucun service ni article d'inventaire n'est sélectionné, c'est un formulaire vide
+        if not service and not inventory_item:
+            return cleaned_data  # Formulaire vide, pas d'erreur
+
+        # Si un service ou article est sélectionné, le prix est requis
+        if (service or inventory_item) and not price:
+            raise forms.ValidationError("Le prix est requis quand un service est sélectionné.")
+
+        return cleaned_data
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -229,21 +285,46 @@ class InvoiceItemForm(forms.ModelForm):
         # Labels en français
         self.fields['service'].label = 'Service'
         self.fields['description'].label = 'Description'
-        self.fields['quantity'].label = 'Quantité'
-        self.fields['unit_price'].label = 'Prix unitaire ($)'
+        self.fields['price'].label = 'Prix ($)'
 
-        # Filtrer les services actifs seulement
+        # Valeur par défaut pour item_type
+        if not self.instance.pk:  # Nouveau formulaire
+            self.fields['item_type'].initial = 'service'
+
+        # Filtrer les services et articles d'inventaire actifs seulement
+        self.fields['inventory_item'].queryset = InventoryItem.objects.filter(is_active=True)
         self.fields['service'].queryset = Service.objects.filter(is_active=True)
 
 
 # Formset pour gérer plusieurs éléments de facture
+class InvoiceItemFormSet(forms.BaseInlineFormSet):
+    """Formset personnalisé pour les éléments de facture"""
+
+    def clean(self):
+        """Validation personnalisée du formset"""
+        if any(self.errors):
+            return
+
+        # Compter les formulaires valides (non vides)
+        valid_forms = 0
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                service = form.cleaned_data.get('service')
+                inventory_item = form.cleaned_data.get('inventory_item')
+                if service or inventory_item:
+                    valid_forms += 1
+
+        # Au moins un service doit être sélectionné
+        if valid_forms == 0:
+            raise forms.ValidationError("Au moins un service doit être ajouté à la facture.")
+
 InvoiceItemFormSet = inlineformset_factory(
     Invoice,
     InvoiceItem,
     form=InvoiceItemForm,
+    formset=InvoiceItemFormSet,
     extra=1,  # Une ligne vide par défaut
-    min_num=1,  # Au moins un élément requis
-    validate_min=True,
+    min_num=0,  # Pas de minimum requis
     can_delete=True
 )
 
@@ -450,21 +531,114 @@ class StockReceiptItemForm(forms.ModelForm):
             'purchase_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
         }
 
+
+# ==================== FORMULAIRES SOUMISSIONS ====================
+
+class QuoteForm(forms.ModelForm):
+    """Formulaire pour les soumissions"""
+
+    class Meta:
+        model = Quote
+        fields = ['client', 'vehicle', 'valid_until', 'discount_percentage', 'is_dealer_discount', 'notes', 'terms_conditions']
+        widgets = {
+            'client': forms.Select(attrs={'class': 'form-select'}),
+            'vehicle': forms.Select(attrs={'class': 'form-select'}),
+            'valid_until': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'discount_percentage': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100'}),
+            'is_dealer_discount': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Notes internes...'}),
+            'terms_conditions': forms.Textarea(attrs={'class': 'form-control', 'rows': 4, 'placeholder': 'Conditions générales de la soumission...'}),
+        }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtrer les articles d'inventaire actifs
+
+        # Labels en français
+        self.fields['client'].label = 'Client'
+        self.fields['vehicle'].label = 'Véhicule'
+        self.fields['valid_until'].label = 'Valide jusqu\'au'
+        self.fields['discount_percentage'].label = 'Rabais (%)'
+        self.fields['is_dealer_discount'].label = 'Rabais concessionnaire (30%)'
+        self.fields['notes'].label = 'Notes internes'
+        self.fields['terms_conditions'].label = 'Conditions générales'
+
+        # Définir la date de validité par défaut (30 jours)
+        if not self.instance.pk:
+            from datetime import date, timedelta
+            self.fields['valid_until'].initial = date.today() + timedelta(days=30)
+
+        # Filtrer les véhicules selon le client sélectionné
+        client_id = None
+
+        # Récupérer l'ID du client depuis les données POST ou l'instance
+        if self.data and 'client' in self.data:
+            try:
+                client_id = int(self.data.get('client'))
+            except (ValueError, TypeError):
+                client_id = None
+        elif self.instance.pk and self.instance.client:
+            client_id = self.instance.client.id
+
+        # Filtrer les véhicules selon le client
+        if client_id:
+            self.fields['vehicle'].queryset = Vehicle.objects.filter(client_id=client_id)
+            # Maintenir la sélection du véhicule si elle existe dans les données
+            if self.data and 'vehicle' in self.data:
+                try:
+                    vehicle_id = int(self.data.get('vehicle'))
+                    if Vehicle.objects.filter(id=vehicle_id, client_id=client_id).exists():
+                        self.fields['vehicle'].initial = vehicle_id
+                except (ValueError, TypeError):
+                    pass
+        else:
+            self.fields['vehicle'].queryset = Vehicle.objects.none()
+
+
+class QuoteItemForm(forms.ModelForm):
+    """Formulaire pour les éléments de soumission"""
+
+    class Meta:
+        model = QuoteItem
+        fields = ['item_type', 'service', 'inventory_item', 'description', 'price']
+        widgets = {
+            'item_type': forms.HiddenInput(),  # Champ caché avec valeur par défaut
+            'service': forms.Select(attrs={'class': 'form-select'}),
+            'inventory_item': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description personnalisée'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Labels en français
+        self.fields['service'].label = 'Service'
+        self.fields['inventory_item'].label = 'Article d\'inventaire'
+        self.fields['description'].label = 'Description'
+        self.fields['price'].label = 'Prix ($)'
+
+        # Valeur par défaut pour item_type
+        if not self.instance.pk:  # Nouveau formulaire
+            self.fields['item_type'].initial = 'service'
+
+        # Filtrer les services et articles d'inventaire actifs seulement
         self.fields['inventory_item'].queryset = InventoryItem.objects.filter(is_active=True)
+        self.fields['service'].queryset = Service.objects.filter(is_active=True)
 
 
-# Formset pour les éléments de facture
-InvoiceItemFormSet = inlineformset_factory(
-    Invoice,
-    InvoiceItem,
-    form=InvoiceItemForm,
-    extra=1,
-    can_delete=True,
-    fields=['item_type', 'service', 'inventory_item', 'description', 'quantity', 'unit_price']
+# Formset pour les éléments de soumission (un service par défaut, ajout/suppression possible)
+QuoteItemFormSet = forms.inlineformset_factory(
+    Quote,
+    QuoteItem,
+    form=QuoteItemForm,
+    extra=1,  # Un seul service par défaut
+    can_delete=True,  # Permettre la suppression
+    min_num=1,  # Au minimum un service requis
+    validate_min=True
 )
+
+
+# Formset pour les éléments de facture (définition supprimée - utilise celle du haut)
 
 # Formset pour les éléments de bon de réception
 StockReceiptItemFormSet = inlineformset_factory(

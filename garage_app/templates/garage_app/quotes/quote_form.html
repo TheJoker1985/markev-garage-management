@@ -4,12 +4,12 @@
 
 {% block content %}
 <style>
-.invoice-item-form {
+.quote-item-form {
     transition: all 0.3s ease;
     position: relative;
 }
 
-.invoice-item-form:hover {
+.quote-item-form:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(0,123,255,0.15) !important;
 }
@@ -47,7 +47,7 @@
     </div>
 </div>
 
-<form method="post" id="invoice-form">
+<form method="post" id="quote-form">
     {% csrf_token %}
     
     <div class="row">
@@ -77,26 +77,16 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="{{ form.invoice_date.id_for_label }}" class="form-label">{{ form.invoice_date.label }} *</label>
-                                {{ form.invoice_date }}
-                                {% if form.invoice_date.errors %}
-                                    <div class="text-danger">{{ form.invoice_date.errors }}</div>
+                                <label for="{{ form.valid_until.id_for_label }}" class="form-label">{{ form.valid_until.label }} *</label>
+                                {{ form.valid_until }}
+                                {% if form.valid_until.errors %}
+                                    <div class="text-danger">{{ form.valid_until.errors }}</div>
                                 {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Date limite de validité de la soumission
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="{{ form.payment_method.id_for_label }}" class="form-label">
-                            <i class="fas fa-credit-card me-2"></i>{{ form.payment_method.label }}
-                        </label>
-                        {{ form.payment_method }}
-                        {% if form.payment_method.errors %}
-                            <div class="text-danger">{{ form.payment_method.errors }}</div>
-                        {% endif %}
-                        <div class="form-text">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Sélectionnez le mode de paiement utilisé par le client (optionnel)
                         </div>
                     </div>
 
@@ -108,6 +98,20 @@
                         {% if form.notes.errors %}
                             <div class="text-danger">{{ form.notes.errors }}</div>
                         {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.terms_conditions.id_for_label }}" class="form-label">
+                            <i class="fas fa-file-contract me-2"></i>{{ form.terms_conditions.label }}
+                        </label>
+                        {{ form.terms_conditions }}
+                        {% if form.terms_conditions.errors %}
+                            <div class="text-danger">{{ form.terms_conditions.errors }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Conditions générales de la soumission (optionnel)
+                        </div>
                     </div>
                 </div>
             </div>
@@ -185,14 +189,14 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Services et éléments de facture</h5>
+                    <h5 class="mb-0">Services et éléments de soumission</h5>
                 </div>
                 <div class="card-body">
                     {{ formset.management_form }}
-                    
-                    <div id="invoice-items">
+
+                    <div id="quote-items">
                         {% for form in formset %}
-                            <div class="invoice-item-form border border-2 border-primary rounded-3 p-4 mb-4 bg-light shadow-sm">
+                            <div class="quote-item-form border border-2 border-primary rounded-3 p-4 mb-4 bg-light shadow-sm">
                                 {% if form.non_field_errors %}
                                     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
                                 {% endif %}
@@ -201,9 +205,9 @@
                                     <h6 class="text-primary mb-0">
                                         <i class="fas fa-cog me-2"></i>Service {{ forloop.counter }}
                                     </h6>
-                                    {% if formset.can_delete %}
+                                    {% if formset.can_delete and not forloop.first %}
                                         <div style="display: none;">{{ form.DELETE }}</div>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeInvoiceItem(this)">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuoteItem(this)">
                                             <i class="fas fa-trash me-1"></i>Supprimer
                                         </button>
                                     {% endif %}
@@ -253,7 +257,7 @@
                     </div>
                     
                     <div class="text-center mt-4">
-                        <button type="button" class="btn btn-outline-primary btn-lg" onclick="addInvoiceItem()">
+                        <button type="button" class="btn btn-outline-primary btn-lg" onclick="addQuoteItem()">
                             <i class="fas fa-plus me-2"></i>Ajouter un service
                         </button>
                     </div>
@@ -266,9 +270,11 @@
     <div class="row mt-4">
         <div class="col-12">
             <div class="d-flex justify-content-between">
-                <a href="{% if invoice %}{% url 'garage_app:invoice_detail' invoice.id %}{% else %}{% url 'garage_app:invoice_list' %}{% endif %}" 
+                <a href="{% if quote %}{% url 'garage_app:quote_detail' quote.id %}{% else %}{% url 'garage_app:quote_list' %}{% endif %}"
                    class="btn btn-secondary">Annuler</a>
-                <button type="submit" class="btn btn-primary">{{ submit_text }}</button>
+                <button type="submit" class="btn btn-primary">
+                    {% if quote %}Modifier la soumission{% else %}Créer la soumission{% endif %}
+                </button>
             </div>
         </div>
     </div>
@@ -307,9 +313,9 @@ function updateVehicles() {
         });
 }
 
-// Fonction pour supprimer un élément de facture
-function removeInvoiceItem(button) {
-    const itemForm = button.closest('.invoice-item-form');
+// Fonction pour supprimer un élément de soumission
+function removeQuoteItem(button) {
+    const itemForm = button.closest('.quote-item-form');
     const deleteCheckbox = itemForm.querySelector('input[name$="-DELETE"]');
 
     if (deleteCheckbox) {
@@ -318,12 +324,12 @@ function removeInvoiceItem(button) {
     }
 }
 
-function addInvoiceItem() {
-    const totalForms = document.querySelector('#id_invoice_items-TOTAL_FORMS');
+function addQuoteItem() {
+    const totalForms = document.querySelector('#id_quote_items-TOTAL_FORMS');
     const formNum = parseInt(totalForms.value);
 
     // Clone the last form
-    const lastForm = document.querySelector('.invoice-item-form:last-child');
+    const lastForm = document.querySelector('.quote-item-form:last-child');
     const newForm = lastForm.cloneNode(true);
 
     // Update form number in all inputs
@@ -354,7 +360,7 @@ function addInvoiceItem() {
     newForm.style.display = 'block';
 
     // Add to DOM
-    document.getElementById('invoice-items').appendChild(newForm);
+    document.getElementById('quote-items').appendChild(newForm);
 
     // Update total forms count
     totalForms.value = formNum + 1;
@@ -534,7 +540,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Observer les changements dans le conteneur du formset
-    const formsetContainer = document.querySelector('#invoice-items');
+    const formsetContainer = document.querySelector('#quote-items');
     if (formsetContainer) {
         observer.observe(formsetContainer, { childList: true, subtree: true });
     }

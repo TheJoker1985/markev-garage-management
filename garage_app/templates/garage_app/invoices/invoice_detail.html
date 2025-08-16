@@ -22,6 +22,9 @@
                 <a href="{% url 'garage_app:invoice_print' invoice.id %}" class="btn btn-outline-info" target="_blank">
                     <i class="fas fa-print me-2"></i>Imprimer
                 </a>
+                <a href="{% url 'garage_app:invoice_delete' invoice.id %}" class="btn btn-danger">
+                    <i class="fas fa-trash-alt me-2"></i>Supprimer
+                </a>
                 <a href="{% url 'garage_app:invoice_list' %}" class="btn btn-secondary">
                     <i class="fas fa-arrow-left me-2"></i>Retour à la liste
                 </a>
@@ -117,10 +120,31 @@
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-sm">
+                        <!-- Prix régulier (avant rabais) -->
                         <tr>
-                            <td>Sous-total:</td>
+                            <td>Prix régulier:</td>
                             <td class="text-end">${{ invoice.subtotal|floatformat:2 }}</td>
                         </tr>
+
+                        <!-- Rabais (si applicable) -->
+                        {% if invoice.discount_percentage > 0 or invoice.is_dealer_discount %}
+                        <tr class="text-success">
+                            <td>
+                                {% if invoice.is_dealer_discount %}
+                                    Rabais concessionnaire (30%):
+                                {% else %}
+                                    Rabais ({{ invoice.discount_percentage }}%):
+                                {% endif %}
+                            </td>
+                            <td class="text-end">-${{ invoice.discount_amount|floatformat:2 }}</td>
+                        </tr>
+                        <tr class="border-bottom">
+                            <td><strong>Sous-total après rabais:</strong></td>
+                            <td class="text-end"><strong>${{ invoice.subtotal_after_discount|floatformat:2 }}</strong></td>
+                        </tr>
+                        {% endif %}
+
+                        <!-- Taxes -->
                         <tr>
                             <td>TPS (5%):</td>
                             <td class="text-end">${{ invoice.gst_amount|floatformat:2 }}</td>
@@ -129,7 +153,9 @@
                             <td>TVQ (9.975%):</td>
                             <td class="text-end">${{ invoice.qst_amount|floatformat:2 }}</td>
                         </tr>
-                        <tr class="table-primary">
+
+                        <!-- Total final -->
+                        <tr class="table-primary border-top">
                             <td><strong>Total:</strong></td>
                             <td class="text-end"><strong>${{ invoice.total_amount|floatformat:2 }}</strong></td>
                         </tr>
@@ -186,8 +212,7 @@
                                 <tr>
                                     <th>Service</th>
                                     <th>Description</th>
-                                    <th>Quantité</th>
-                                    <th>Prix unitaire</th>
+                                    <th>Prix</th>
                                     <th>Total</th>
                                 </tr>
                             </thead>
@@ -196,8 +221,7 @@
                                 <tr>
                                     <td>{{ item.service.name }}</td>
                                     <td>{{ item.description|default:"-" }}</td>
-                                    <td>{{ item.quantity }}</td>
-                                    <td>${{ item.unit_price|floatformat:2 }}</td>
+                                    <td>${{ item.price|floatformat:2 }}</td>
                                     <td>${{ item.total_price|floatformat:2 }}</td>
                                 </tr>
                                 {% endfor %}

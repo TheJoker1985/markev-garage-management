@@ -1,0 +1,281 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Alertes de Stock - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>🔔 Tableau de bord des alertes de stock</h1>
+            <div>
+                <a href="{% url 'garage_app:inventory_list' %}" class="btn btn-outline-secondary me-2">
+                    <i class="fas fa-boxes me-2"></i>Retour à l'inventaire
+                </a>
+                <form method="post" action="{% url 'garage_app:run_stock_check' %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary" onclick="return confirm('Lancer la vérification des stocks maintenant ?')">
+                        <i class="fas fa-sync me-2"></i>Vérifier les stocks
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistiques rapides -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h5>{{ items_needing_attention.out_of_stock|length }}</h5>
+                <p class="mb-0">Rupture de stock</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5>{{ items_needing_attention.needs_reorder|length }}</h5>
+                <p class="mb-0">À réapprovisionner</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h5>{{ items_needing_attention.low_stock|length }}</h5>
+                <p class="mb-0">Stock faible</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h5>{{ summary.active_alerts }}</h5>
+                <p class="mb-0">Alertes actives</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h5>{{ summary.resolved_alerts }}</h5>
+                <p class="mb-0">Alertes résolues</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card bg-secondary text-white">
+            <div class="card-body text-center">
+                <h5>{{ summary.total_alerts }}</h5>
+                <p class="mb-0">Total alertes</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Articles nécessitant une attention immédiate -->
+{% if items_needing_attention.out_of_stock or items_needing_attention.needs_reorder %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">🚨 Articles nécessitant une attention immédiate</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if items_needing_attention.out_of_stock %}
+                    <div class="col-md-6">
+                        <h6 class="text-danger">Rupture de stock</h6>
+                        <ul class="list-unstyled">
+                            {% for item in items_needing_attention.out_of_stock|slice:":5" %}
+                            <li class="mb-1">
+                                <span class="badge bg-danger me-2">0</span>
+                                <strong>{{ item.name }}</strong> ({{ item.sku }})
+                            </li>
+                            {% endfor %}
+                            {% if items_needing_attention.out_of_stock|length > 5 %}
+                            <li class="text-muted">... et {{ items_needing_attention.out_of_stock|length|add:"-5" }} autres</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if items_needing_attention.needs_reorder %}
+                    <div class="col-md-6">
+                        <h6 class="text-warning">À réapprovisionner</h6>
+                        <ul class="list-unstyled">
+                            {% for item in items_needing_attention.needs_reorder|slice:":5" %}
+                            <li class="mb-1">
+                                <span class="badge bg-warning me-2">{{ item.quantity_in_stock }}</span>
+                                <strong>{{ item.name }}</strong> (Seuil: {{ item.reorder_level }})
+                            </li>
+                            {% endfor %}
+                            {% if items_needing_attention.needs_reorder|length > 5 %}
+                            <li class="text-muted">... et {{ items_needing_attention.needs_reorder|length|add:"-5" }} autres</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-12">
+        <!-- Filtres -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="status" class="form-label">Statut</label>
+                        <select class="form-select" id="status" name="status">
+                            {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="alert_type" class="form-label">Type d'alerte</label>
+                        <select class="form-select" id="alert_type" name="alert_type">
+                            <option value="">Tous les types</option>
+                            {% for value, label in alert_type_choices %}
+                                <option value="{{ value }}" {% if alert_type_filter == value %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-outline-primary me-2">
+                            <i class="fas fa-filter"></i> Filtrer
+                        </button>
+                        <a href="{% url 'garage_app:stock_alerts_dashboard' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Effacer
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Liste des alertes -->
+        <div class="card">
+            <div class="card-body">
+                {% if page_obj %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Article</th>
+                                    <th>Type d'alerte</th>
+                                    <th>Stock actuel</th>
+                                    <th>Seuil</th>
+                                    <th>Date</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alert in page_obj %}
+                                    <tr class="{% if alert.status == 'active' %}table-warning{% elif alert.status == 'resolved' %}table-success{% endif %}">
+                                        <td>
+                                            <strong>{{ alert.inventory_item.name }}</strong>
+                                            <br><small class="text-muted">SKU: {{ alert.inventory_item.sku }}</small>
+                                        </td>
+                                        <td>
+                                            {% if alert.alert_type == 'out_of_stock' %}
+                                                <span class="badge bg-danger">🚨 {{ alert.get_alert_type_display }}</span>
+                                            {% elif alert.alert_type == 'reorder' %}
+                                                <span class="badge bg-warning">⚠️ {{ alert.get_alert_type_display }}</span>
+                                            {% elif alert.alert_type == 'low_stock' %}
+                                                <span class="badge bg-info">📉 {{ alert.get_alert_type_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <strong>{{ alert.inventory_item.quantity_in_stock }}</strong>
+                                            <br><small class="text-muted">Au moment de l'alerte: {{ alert.quantity_at_alert }}</small>
+                                        </td>
+                                        <td>{{ alert.threshold_level }}</td>
+                                        <td>
+                                            {{ alert.alert_date|date:"d/m/Y H:i" }}
+                                            <br><small class="text-muted">{{ alert.days_since_alert }} jour(s)</small>
+                                        </td>
+                                        <td>
+                                            {% if alert.status == 'active' %}
+                                                <span class="badge bg-danger">{{ alert.get_status_display }}</span>
+                                            {% elif alert.status == 'acknowledged' %}
+                                                <span class="badge bg-warning">{{ alert.get_status_display }}</span>
+                                            {% elif alert.status == 'resolved' %}
+                                                <span class="badge bg-success">{{ alert.get_status_display }}</span>
+                                            {% elif alert.status == 'dismissed' %}
+                                                <span class="badge bg-secondary">{{ alert.get_status_display }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="{% url 'garage_app:stock_alert_detail' alert.id %}" 
+                                                   class="btn btn-outline-primary" title="Voir détails">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                {% if alert.status == 'active' %}
+                                                <a href="{% url 'admin:garage_app_inventoryitem_change' alert.inventory_item.id %}" 
+                                                   class="btn btn-outline-warning" title="Modifier article">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if page_obj.has_other_pages %}
+                        <nav aria-label="Navigation des alertes">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if alert_type_filter %}&alert_type={{ alert_type_filter }}{% endif %}">Précédent</a>
+                                    </li>
+                                {% endif %}
+
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ num }}</span>
+                                        </li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if alert_type_filter %}&alert_type={{ alert_type_filter }}{% endif %}">{{ num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if alert_type_filter %}&alert_type={{ alert_type_filter }}{% endif %}">Suivant</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                        <h5>Aucune alerte trouvée</h5>
+                        <p class="text-muted">Il n'y a actuellement aucune alerte correspondant à vos critères.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

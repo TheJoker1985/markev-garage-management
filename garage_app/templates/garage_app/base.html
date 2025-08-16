@@ -267,11 +267,31 @@
                         <i class="fas fa-file-invoice me-2"></i>Factures
                     </a>
                 </li>
-                <!-- Menu Inventaire - lien direct -->
                 <li class="nav-item">
-                    <a class="nav-link {% if 'supplier' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name or 'stock' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:inventory_list' %}">
+                    <a class="nav-link {% if 'quote' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:quote_list' %}">
+                        <i class="fas fa-file-contract me-2"></i>Soumissions
+                    </a>
+                </li>
+                <!-- Menu Inventaire avec sous-menu -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if 'supplier' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name or 'stock' in request.resolver_match.url_name %}active{% endif %}" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-boxes me-2"></i>Inventaire
                     </a>
+                    <ul class="dropdown-menu" aria-labelledby="inventoryDropdown">
+                        <li><a class="dropdown-item" href="{% url 'garage_app:inventory_list' %}">
+                            <i class="fas fa-list me-2"></i>Articles d'inventaire
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:stock_alerts_dashboard' %}">
+                            <i class="fas fa-bell me-2"></i>Alertes de stock
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:supplier_list' %}">
+                            <i class="fas fa-building me-2"></i>Fournisseurs
+                        </a></li>
+                        <li><a class="dropdown-item" href="{% url 'garage_app:stock_receipt_list' %}">
+                            <i class="fas fa-truck me-2"></i>Réception de commande
+                        </a></li>
+                    </ul>
                 </li>
                 <!-- Menu Dépenses - lien direct -->
                 <li class="nav-item">
