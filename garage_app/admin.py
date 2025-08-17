@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    CompanyProfile, Client, Vehicle, Service, InventoryItem, StockAlert,
-    Invoice, InvoiceItem, Expense, FiscalYearArchive,
+    CompanyProfile, Client, Vehicle, VehicleType, Service, ServiceConsumption,
+    InventoryItem, StockAlert, Invoice, InvoiceItem, Expense, FiscalYearArchive,
     Supplier, RecurringExpense, Appointment, StockReceipt, StockReceiptItem
 )
 
@@ -91,16 +91,43 @@ class SupplierAdmin(admin.ModelAdmin):
     )
 
 
+@admin.register(VehicleType)
+class VehicleTypeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'description', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('name', 'description', 'is_active')
+        }),
+        ('Configuration API NHTSA', {
+            'fields': ('nhtsa_body_classes',),
+            'description': 'Liste des classes de carrosserie NHTSA correspondant à ce type (format JSON)'
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'client', 'year', 'color', 'license_plate', 'created_at']
-    list_filter = ['make', 'year', 'created_at']
+    list_display = ['__str__', 'client', 'vehicle_type', 'year', 'color', 'license_plate', 'auto_identified_type', 'created_at']
+    list_filter = ['make', 'year', 'vehicle_type', 'auto_identified_type', 'created_at']
     search_fields = ['make', 'model', 'license_plate', 'client__first_name', 'client__last_name']
     readonly_fields = ['created_at', 'updated_at']
+    actions = ['identify_vehicle_types']
 
     fieldsets = (
         ('Informations du véhicule', {
             'fields': ('client', 'make', 'model', 'year', 'color')
+        }),
+        ('Classification', {
+            'fields': ('vehicle_type', 'auto_identified_type'),
+            'description': 'Le type peut être identifié automatiquement via l\'API NHTSA'
         }),
         ('Identification', {
             'fields': ('license_plate',)
@@ -113,6 +140,105 @@ class VehicleAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+    def identify_vehicle_types(self, request, queryset):
+        """Action pour identifier automatiquement les types de véhicules"""
+        from .services import NHTSAService
+
+        success_count = 0
+        for vehicle in queryset:
+            if NHTSAService.auto_identify_and_update_vehicle(vehicle):
+                success_count += 1
+
+        self.message_user(
+            request,
+            f"{success_count} véhicule(s) identifié(s) automatiquement sur {queryset.count()} sélectionné(s)."
+        )
+
+    identify_vehicle_types.short_description = "Identifier automatiquement les types de véhicules"
+
+    def test_sendgrid_config(self, request, queryset):
+        """Action pour tester la configuration SendGrid"""
+        from django.core.mail import EmailMessage
+        from django.conf import settings
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Email de test
+            subject = "Test Configuration SendGrid - Garage MarKev"
+            message = f"""
+Test de configuration SendGrid depuis l'interface d'administration.
+
+Configuration actuelle :
+- Backend : {settings.EMAIL_BACKEND}
+- Expéditeur : {settings.DEFAULT_FROM_EMAIL}
+- Mode sandbox : {getattr(settings, 'SENDGRID_SANDBOX_MODE_IN_DEBUG', 'Non défini')}
+
+Si vous recevez ce message, SendGrid fonctionne correctement !
+            """
+
+            # Utiliser l'email de l'utilisateur connecté
+            email = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[request.user.email] if request.user.email else ['admin@example.com'],
+            )
+
+            email.send()
+
+            self.message_user(
+                request,
+                f"Email de test envoyé avec succès à {request.user.email or 'admin@example.com'}"
+            )
+
+            logger.info(f"Test SendGrid réussi - email envoyé à {request.user.email}")
+
+        except Exception as e:
+            error_msg = f"Erreur lors du test SendGrid : {str(e)}"
+            self.message_user(request, error_msg, level='ERROR')
+            logger.error(f"Erreur test SendGrid : {str(e)}")
+
+    test_sendgrid_config.short_description = "Tester la configuration SendGrid"
+
+    actions = ['identify_vehicle_types', 'test_sendgrid_config']
+
+
+@admin.register(ServiceConsumption)
+class ServiceConsumptionAdmin(admin.ModelAdmin):
+    list_display = ['service', 'vehicle_type', 'inventory_item', 'consumption_rate', 'unit', 'is_active']
+    list_filter = ['service__category', 'vehicle_type', 'unit', 'is_active', 'created_at']
+    search_fields = ['service__name', 'vehicle_type__name', 'inventory_item__name']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Configuration de base', {
+            'fields': ('service', 'vehicle_type', 'inventory_item')
+        }),
+        ('Consommation', {
+            'fields': ('consumption_rate', 'unit'),
+            'description': 'Définir la quantité consommée par service'
+        }),
+        ('Options', {
+            'fields': ('is_active', 'notes')
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    # Filtres pour faciliter la configuration
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "service":
+            kwargs["queryset"] = Service.objects.filter(is_active=True).order_by('category', 'name')
+        elif db_field.name == "vehicle_type":
+            kwargs["queryset"] = VehicleType.objects.filter(is_active=True).order_by('name')
+        elif db_field.name == "inventory_item":
+            kwargs["queryset"] = InventoryItem.objects.filter(is_active=True).order_by('category', 'name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 @admin.register(Service)
@@ -138,8 +264,8 @@ class ServiceAdmin(admin.ModelAdmin):
 
 @admin.register(InventoryItem)
 class InventoryItemAdmin(admin.ModelAdmin):
-    list_display = ['name', 'sku', 'supplier', 'category', 'quantity_in_stock', 'stock_status', 'alert_status', 'unit_cost', 'unit_price', 'is_active']
-    list_filter = ['supplier', 'category', 'is_active', 'created_at']
+    list_display = ['name', 'sku', 'supplier', 'category', 'quality_tier', 'quantity_in_stock', 'stock_status', 'alert_status', 'unit_cost', 'unit_price', 'is_active']
+    list_filter = ['supplier', 'category', 'quality_tier', 'is_active', 'created_at']
     search_fields = ['name', 'sku', 'description', 'supplier__name']
     readonly_fields = ['created_at', 'updated_at', 'total_value']
     actions = ['check_stock_alerts', 'bulk_update_reorder_levels']
@@ -147,6 +273,10 @@ class InventoryItemAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Informations de base', {
             'fields': ('name', 'description', 'sku', 'supplier', 'category')
+        }),
+        ('Qualité et tarification', {
+            'fields': ('quality_tier',),
+            'description': 'Niveau de qualité pour la tarification dynamique'
         }),
         ('Inventaire et seuils', {
             'fields': ('quantity_in_stock', 'minimum_stock_level', 'reorder_level')

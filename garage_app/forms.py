@@ -100,14 +100,24 @@ class ClientForm(forms.ModelForm):
 class VehicleForm(forms.ModelForm):
     """Formulaire pour la gestion des véhicules"""
 
+    # Champs personnalisés pour les dropdowns
+    make = forms.CharField(
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_make'}),
+        required=True
+    )
+
+    model = forms.CharField(
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_model', 'disabled': True}),
+        required=True
+    )
+
     class Meta:
         model = Vehicle
-        fields = ['client', 'make', 'model', 'year', 'color', 'license_plate', 'notes']
+        fields = ['client', 'make', 'model', 'year', 'vehicle_type', 'color', 'license_plate', 'notes']
         widgets = {
             'client': forms.Select(attrs={'class': 'form-select'}),
-            'make': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Toyota, Honda, etc.'}),
-            'model': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Camry, Civic, etc.'}),
             'year': forms.NumberInput(attrs={'class': 'form-control', 'min': 1900, 'max': 2030}),
+            'vehicle_type': forms.Select(attrs={'class': 'form-select'}),
             'color': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Noir, Blanc, etc.'}),
             'license_plate': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ABC 123'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -127,6 +137,7 @@ class VehicleForm(forms.ModelForm):
         self.fields['make'].label = 'Marque'
         self.fields['model'].label = 'Modèle'
         self.fields['year'].label = 'Année'
+        self.fields['vehicle_type'].label = 'Type de véhicule'
         self.fields['color'].label = 'Couleur'
         self.fields['license_plate'].label = 'Plaque d\'immatriculation'
         self.fields['notes'].label = 'Notes'

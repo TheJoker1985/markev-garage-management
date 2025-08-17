@@ -22,6 +22,9 @@ urlpatterns = [
     path('vehicles/new/<int:client_id>/', views.vehicle_create, name='vehicle_create_for_client'),
     path('vehicles/<int:vehicle_id>/edit/', views.vehicle_update, name='vehicle_update'),
     path('vehicles/<int:vehicle_id>/delete/', views.vehicle_delete, name='vehicle_delete'),
+    path('vehicles/identify-type/', views.identify_vehicle_type, name='identify_vehicle_type'),
+    path('api/vehicle-makes/', views.get_vehicle_makes, name='get_vehicle_makes'),
+    path('api/vehicle-models/', views.get_vehicle_models, name='get_vehicle_models'),
 
     # Gestion des services
     path('services/', views.service_list, name='service_list'),
@@ -39,6 +42,7 @@ urlpatterns = [
     path('invoices/<int:invoice_id>/mark-paid/', views.invoice_mark_paid, name='invoice_mark_paid'),
     path('invoices/<int:invoice_id>/delete/', views.invoice_delete, name='invoice_delete'),
     path('invoices/<int:invoice_id>/pdf/', views.generate_invoice_pdf, name='generate_invoice_pdf'),
+    path('invoices/<int:invoice_id>/send/', views.send_invoice_email, name='send_invoice_email'),
 
     # Gestion des soumissions
     path('quotes/', views.quote_list, name='quote_list'),

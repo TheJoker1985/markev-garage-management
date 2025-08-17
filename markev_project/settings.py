@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -159,3 +163,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# ==============================================================================
+# CONFIGURATION POUR L'ENVOI DE COURRIELS (SENDGRID)
+# ==============================================================================
+EMAIL_BACKEND = "sendgrid_backend.SendgridBackend"
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+# Utiliser une adresse vérifiée ou celle configurée dans .env
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', "Garage.MarKev@outlook.com")
+SENDGRID_SANDBOX_MODE_IN_DEBUG = False  # Mode production - les emails sont vraiment envoyés
+
+# Configuration de fallback pour le développement local
+if not SENDGRID_API_KEY and DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("⚠️  SENDGRID_API_KEY non configurée - utilisation du backend console pour les emails")

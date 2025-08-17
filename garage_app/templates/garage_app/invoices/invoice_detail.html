@@ -22,6 +22,15 @@
                 <a href="{% url 'garage_app:invoice_print' invoice.id %}" class="btn btn-outline-info" target="_blank">
                     <i class="fas fa-print me-2"></i>Imprimer
                 </a>
+                {% if invoice.client.email %}
+                    <a href="{% url 'garage_app:send_invoice_email' invoice.id %}" class="btn btn-success" title="Envoyer par courriel à {{ invoice.client.email }}">
+                        <i class="fas fa-envelope me-2"></i>Envoyer par courriel
+                    </a>
+                {% else %}
+                    <button class="btn btn-outline-secondary" disabled title="Le client n'a pas d'adresse courriel configurée">
+                        <i class="fas fa-envelope me-2"></i>Envoyer par courriel
+                    </button>
+                {% endif %}
                 <a href="{% url 'garage_app:invoice_delete' invoice.id %}" class="btn btn-danger">
                     <i class="fas fa-trash-alt me-2"></i>Supprimer
                 </a>

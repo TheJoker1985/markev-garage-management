@@ -137,6 +137,33 @@ class Client(models.Model):
         return f"{self.first_name} {self.last_name}"
 
 
+class VehicleType(models.Model):
+    """Modèle pour les types de véhicules (VUS, Berline, Pickup, etc.)"""
+    name = models.CharField(max_length=50, unique=True, verbose_name="Nom du type")
+    description = models.TextField(blank=True, null=True, verbose_name="Description")
+
+    # Correspondances avec l'API NHTSA pour le mapping automatique
+    nhtsa_body_classes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Liste des 'Body Class' de l'API NHTSA correspondant à ce type",
+        verbose_name="Classes de carrosserie NHTSA"
+    )
+
+    is_active = models.BooleanField(default=True, verbose_name="Type actif")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Type de véhicule"
+        verbose_name_plural = "Types de véhicules"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Vehicle(models.Model):
     """Modèle pour les véhicules des clients"""
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='vehicles', verbose_name="Client")
@@ -148,6 +175,22 @@ class Vehicle(models.Model):
     )
     color = models.CharField(max_length=30, blank=True, null=True, verbose_name="Couleur")
     license_plate = models.CharField(max_length=20, blank=True, null=True, verbose_name="Plaque d'immatriculation")
+
+    # Nouveau champ pour le type de véhicule
+    vehicle_type = models.ForeignKey(
+        VehicleType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vehicles',
+        verbose_name="Type de véhicule"
+    )
+
+    # Champ pour indiquer si le type a été identifié automatiquement
+    auto_identified_type = models.BooleanField(
+        default=False,
+        verbose_name="Type identifié automatiquement"
+    )
 
     notes = models.TextField(blank=True, null=True, verbose_name="Notes")
 
@@ -253,6 +296,68 @@ class Service(models.Model):
         return self.name
 
 
+class ServiceConsumption(models.Model):
+    """Modèle pour définir la consommation de matériaux par service et type de véhicule"""
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.CASCADE,
+        related_name='consumption_rules',
+        verbose_name="Service"
+    )
+    vehicle_type = models.ForeignKey(
+        VehicleType,
+        on_delete=models.CASCADE,
+        related_name='consumption_rules',
+        verbose_name="Type de véhicule"
+    )
+    inventory_item = models.ForeignKey(
+        'InventoryItem',  # Forward reference car InventoryItem est défini après
+        on_delete=models.CASCADE,
+        related_name='consumption_rules',
+        verbose_name="Article d'inventaire"
+    )
+
+    # Taux de consommation (ex: 0.20 pour 20% d'un rouleau)
+    consumption_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal('0.0001')), MaxValueValidator(Decimal('10.0000'))],
+        verbose_name="Taux de consommation",
+        help_text="Quantité consommée par service (ex: 0.20 pour 20% d'un rouleau)"
+    )
+
+    # Unité de mesure pour clarifier le taux
+    UNIT_CHOICES = [
+        ('percentage', 'Pourcentage du rouleau'),
+        ('meters', 'Mètres'),
+        ('pieces', 'Pièces'),
+        ('liters', 'Litres'),
+        ('other', 'Autre'),
+    ]
+    unit = models.CharField(
+        max_length=20,
+        choices=UNIT_CHOICES,
+        default='percentage',
+        verbose_name="Unité de mesure"
+    )
+
+    notes = models.TextField(blank=True, null=True, verbose_name="Notes")
+    is_active = models.BooleanField(default=True, verbose_name="Règle active")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Règle de consommation"
+        verbose_name_plural = "Règles de consommation"
+        ordering = ['service__name', 'vehicle_type__name']
+        # Contrainte d'unicité : une seule règle par combinaison service/type/article
+        unique_together = ['service', 'vehicle_type', 'inventory_item']
+
+    def __str__(self):
+        return f"{self.service.name} - {self.vehicle_type.name} - {self.inventory_item.name} ({self.consumption_rate})"
+
+
 class InventoryItem(models.Model):
     """Modèle pour la gestion de l'inventaire"""
     name = models.CharField(max_length=200, verbose_name="Nom de l'article")
@@ -269,10 +374,28 @@ class InventoryItem(models.Model):
         verbose_name="Fournisseur"
     )
 
-    # Quantités et prix
-    quantity_in_stock = models.IntegerField(default=0, verbose_name="Quantité en stock")
-    minimum_stock_level = models.IntegerField(default=0, verbose_name="Niveau de stock minimum")
-    reorder_level = models.IntegerField(default=0, verbose_name="Niveau de réapprovisionnement")
+    # Quantités et prix (utilisation de DecimalField pour supporter les fractions)
+    quantity_in_stock = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=Decimal('0.0000'),
+        validators=[MinValueValidator(Decimal('0.0000'))],
+        verbose_name="Quantité en stock"
+    )
+    minimum_stock_level = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=Decimal('0.0000'),
+        validators=[MinValueValidator(Decimal('0.0000'))],
+        verbose_name="Niveau de stock minimum"
+    )
+    reorder_level = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        default=Decimal('0.0000'),
+        validators=[MinValueValidator(Decimal('0.0000'))],
+        verbose_name="Niveau de réapprovisionnement"
+    )
     unit_cost = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -295,6 +418,22 @@ class InventoryItem(models.Model):
         ('other', 'Autre'),
     ]
     category = models.CharField(max_length=20, choices=INVENTORY_CATEGORY_CHOICES, default='other', verbose_name="Catégorie")
+
+    # Niveau de qualité pour la tarification dynamique
+    QUALITY_TIER_CHOICES = [
+        ('standard', 'Standard'),
+        ('ceramic', 'Céramique'),
+        ('premium', 'Premium'),
+        ('ultra', 'Ultra Premium'),
+    ]
+    quality_tier = models.CharField(
+        max_length=20,
+        choices=QUALITY_TIER_CHOICES,
+        blank=True,
+        null=True,
+        verbose_name="Niveau de qualité",
+        help_text="Niveau de qualité du matériau pour la tarification dynamique"
+    )
 
     is_active = models.BooleanField(default=True, verbose_name="Article actif")
 
@@ -647,7 +786,33 @@ class Invoice(models.Model):
                 self.client.default_discount_percentage > Decimal('0.00')):
                 self.discount_percentage = self.client.default_discount_percentage
 
+        # Vérifier si c'est une nouvelle facture ou si le statut change vers 'finalized'
+        is_new = self.pk is None
+        old_status = None
+
+        if not is_new:
+            try:
+                old_invoice = Invoice.objects.get(pk=self.pk)
+                old_status = old_invoice.status
+            except Invoice.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
+
+        # Déclencher la consommation d'inventaire si la facture est finalisée
+        if (is_new and self.status == 'finalized') or (old_status != 'finalized' and self.status == 'finalized'):
+            self._consume_inventory_for_services()
+
+    def _consume_inventory_for_services(self):
+        """Consomme automatiquement l'inventaire pour les services de cette facture"""
+        from .services import InventoryConsumptionService
+
+        try:
+            InventoryConsumptionService.consume_inventory_for_invoice(self)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erreur lors de la consommation d'inventaire pour la facture {self.invoice_number}: {e}")
 
     def calculate_totals(self):
         """Calculer les totaux de la facture"""
@@ -1714,5 +1879,3 @@ class QuoteItem(models.Model):
         # Recalculer les totaux de la soumission
         if self.quote_id:
             self.quote.calculate_totals()
-
-        return invoice

@@ -807,6 +807,392 @@ def generate_invoice_pdf(request, invoice_id):
     return response
 
 
+@login_required
+def send_invoice_email(request, invoice_id):
+    """Envoyer une facture par courriel via SendGrid"""
+    from django.core.mail import EmailMessage
+    from django.contrib import messages
+    from django.conf import settings
+    import logging
+
+    logger = logging.getLogger(__name__)
+    invoice = get_object_or_404(Invoice, id=invoice_id)
+
+    # Vérifier que le client a une adresse courriel
+    if not invoice.client.email:
+        messages.error(request, f'Le client {invoice.client.full_name} n\'a pas d\'adresse courriel configurée.')
+        return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
+
+    try:
+        # Générer le PDF en utilisant la fonction existante mais en mémoire
+        from django.http import HttpResponse
+        import io
+
+        # Créer une réponse temporaire pour capturer le PDF
+        temp_response = HttpResponse(content_type='application/pdf')
+
+        # Générer le PDF (réutiliser la logique existante de generate_invoice_pdf)
+        company_profile = CompanyProfile.objects.first()
+
+        # Créer le buffer pour le PDF
+        buffer = io.BytesIO()
+
+        # Utiliser la même logique que generate_invoice_pdf mais avec notre buffer
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=1*inch)
+
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+
+        # Contenu du PDF (version simplifiée)
+        story = []
+
+        # Titre
+        story.append(Paragraph(f"FACTURE {invoice.invoice_number}", title_style))
+        story.append(Spacer(1, 20))
+
+        # Informations de base
+        if company_profile:
+            company_info = f"<b>{company_profile.name}</b><br/>{company_profile.address}<br/>Tél: {company_profile.phone}"
+            story.append(Paragraph(company_info, styles['Normal']))
+            story.append(Spacer(1, 20))
+
+        # Client
+        client_info = f"<b>Facturé à:</b><br/>{invoice.client.full_name}<br/>{invoice.client.phone}"
+        if invoice.client.email:
+            client_info += f"<br/>{invoice.client.email}"
+        if invoice.vehicle:
+            client_info += f"<br/><b>Véhicule:</b> {invoice.vehicle}"
+
+        story.append(Paragraph(client_info, styles['Normal']))
+        story.append(Spacer(1, 20))
+
+        # Date
+        from datetime import timedelta
+        due_date = invoice.invoice_date + timedelta(days=30)
+        date_info = f"<b>Date:</b> {invoice.invoice_date.strftime('%d/%m/%Y')}<br/><b>Échéance:</b> {due_date.strftime('%d/%m/%Y')}"
+        story.append(Paragraph(date_info, styles['Normal']))
+        story.append(Spacer(1, 20))
+
+        # Services
+        story.append(Paragraph("<b>Services:</b>", styles['Heading3']))
+        for item in invoice.invoice_items.all():
+            service_name = item.service.name if item.service else item.inventory_item.name
+            if item.description:
+                service_name += f" - {item.description}"
+            service_line = f"{service_name}: ${item.price:.2f}"
+            story.append(Paragraph(service_line, styles['Normal']))
+
+        story.append(Spacer(1, 20))
+
+        # Total
+        total_info = f"<b>TOTAL: ${invoice.total_amount:.2f}</b>"
+        story.append(Paragraph(total_info, styles['Heading2']))
+
+        # Construire le PDF
+        doc.build(story)
+
+        # Récupérer le contenu du PDF
+        pdf_content = buffer.getvalue()
+        buffer.close()
+
+        # Préparer le courriel
+        subject = f"Votre facture du Garage MarKev - #{invoice.invoice_number}"
+
+        # Corps du message
+        message_body = f"""
+Bonjour {invoice.client.full_name},
+
+Veuillez trouver ci-joint votre facture #{invoice.invoice_number} d'un montant de {invoice.total_amount:.2f}$.
+
+Détails de la facture :
+- Date : {invoice.invoice_date.strftime('%d/%m/%Y')}
+- Date d'échéance : {due_date.strftime('%d/%m/%Y')}
+- Montant total : {invoice.total_amount:.2f}$
+
+Nous vous remercions de votre confiance.
+
+Cordialement,
+L'équipe du Garage MarKev
+        """
+
+        # Créer le courriel
+        email = EmailMessage(
+            subject=subject,
+            body=message_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[invoice.client.email],
+        )
+
+        # Attacher le PDF
+        email.attach(
+            filename=f"facture_{invoice.invoice_number}.pdf",
+            content=pdf_content,
+            mimetype='application/pdf'
+        )
+
+        # Envoyer le courriel
+        email.send()
+
+        # Message de succès
+        messages.success(
+            request,
+            f'Facture {invoice.invoice_number} envoyée avec succès à {invoice.client.email}'
+        )
+
+        logger.info(f"Facture {invoice.invoice_number} envoyée par courriel à {invoice.client.email}")
+
+    except Exception as e:
+        # Gestion des erreurs
+        error_message = f'Erreur lors de l\'envoi de la facture par courriel : {str(e)}'
+        messages.error(request, error_message)
+        logger.error(f"Erreur envoi courriel facture {invoice.invoice_number}: {str(e)}")
+
+    return redirect('garage_app:invoice_detail', invoice_id=invoice.id)
+
+
+@login_required
+def identify_vehicle_type(request):
+    """Vue AJAX pour identifier automatiquement le type d'un véhicule"""
+    if request.method == 'POST':
+        import json
+        from django.http import JsonResponse
+        from .services import NHTSAService
+
+        try:
+            data = json.loads(request.body)
+            make = data.get('make', '').strip()
+            model = data.get('model', '').strip()
+            year = data.get('year')
+
+            if not make or not model or not year:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Marque, modèle et année requis'
+                })
+
+            # Créer un véhicule temporaire pour l'identification
+            from .models import Client
+            temp_vehicle = Vehicle(make=make, model=model, year=year)
+
+            # Identifier le type
+            vehicle_type = NHTSAService.identify_vehicle_type(temp_vehicle)
+
+            if vehicle_type:
+                return JsonResponse({
+                    'success': True,
+                    'vehicle_type_id': vehicle_type.id,
+                    'vehicle_type_name': vehicle_type.name,
+                    'message': f'Type identifié : {vehicle_type.name}'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Type non identifié pour {make} {model} {year}. Vous pouvez le sélectionner manuellement.'
+                })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Erreur lors de l\'identification : {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
+@login_required
+def get_vehicle_makes(request):
+    """Vue AJAX pour récupérer les marques de véhicules depuis l'API NHTSA avec marques populaires"""
+    if request.method == 'GET':
+        return get_enhanced_makes()
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
+def get_fallback_makes():
+    """Retourne les marques populaires en fallback"""
+    popular_makes = [
+        'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler',
+        'Dodge', 'Ford', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jeep',
+        'Kia', 'Lexus', 'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mitsubishi',
+        'Nissan', 'Pontiac', 'Porsche', 'Ram', 'Subaru', 'Toyota', 'Volkswagen', 'Volvo'
+    ]
+
+    makes = [{'id': i, 'name': make} for i, make in enumerate(popular_makes)]
+
+    return JsonResponse({
+        'success': True,
+        'makes': makes,
+        'fallback': True,
+        'message': 'Utilisation de la liste locale (API indisponible)'
+    })
+
+
+def get_enhanced_makes():
+    """Combine les marques de l'API NHTSA avec les marques populaires"""
+    from django.http import JsonResponse
+    import requests
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Marques populaires à ajouter si manquantes
+    essential_makes = [
+        'Toyota', 'Honda', 'Ford', 'Chevrolet', 'Nissan', 'Hyundai', 'Kia',
+        'Mazda', 'Subaru', 'Volkswagen', 'Mercedes-Benz', 'Audi', 'Volvo'
+    ]
+
+    try:
+        # Récupérer depuis l'API NHTSA
+        url = "https://vpic.nhtsa.dot.gov/api/vehicles/GetMakesForVehicleType/car"
+        params = {'format': 'json'}
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        if data.get('Count', 0) > 0:
+            makes = []
+            make_names = set()
+
+            # Ajouter les marques de l'API
+            for result in data.get('Results', []):
+                make_name = result.get('MakeName', '').strip()
+                if make_name:
+                    makes.append({
+                        'id': result.get('MakeId'),
+                        'name': make_name
+                    })
+                    make_names.add(make_name.upper())
+
+            # Ajouter les marques essentielles si manquantes
+            next_id = max([m.get('id', 0) for m in makes]) + 1 if makes else 1
+
+            for essential in essential_makes:
+                if essential.upper() not in make_names:
+                    makes.append({
+                        'id': next_id,
+                        'name': essential
+                    })
+                    next_id += 1
+                    logger.info(f"Ajout de la marque manquante: {essential}")
+
+            # Trier par nom
+            makes.sort(key=lambda x: x['name'])
+
+            return JsonResponse({
+                'success': True,
+                'makes': makes,
+                'enhanced': True,
+                'message': f'{len(makes)} marques (API NHTSA + marques populaires)'
+            })
+
+        return get_fallback_makes()
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des marques: {e}")
+        return get_fallback_makes()
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
+@login_required
+def get_vehicle_models(request):
+    """Vue AJAX pour récupérer les modèles d'une marque depuis l'API NHTSA"""
+    if request.method == 'GET':
+        from django.http import JsonResponse
+        import requests
+        import logging
+
+        logger = logging.getLogger(__name__)
+        make = request.GET.get('make', '').strip()
+        year = request.GET.get('year', '').strip()
+
+        if not make:
+            return JsonResponse({
+                'success': False,
+                'message': 'Marque requise'
+            })
+
+        try:
+            # Si l'année est fournie, utiliser l'API avec année
+            if year:
+                url = f"https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMakeYear/make/{make}/modelyear/{year}"
+            else:
+                url = f"https://vpic.nhtsa.dot.gov/api/vehicles/GetModelsForMake/{make}"
+
+            params = {'format': 'json'}
+
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+
+            if data.get('Count', 0) > 0:
+                models = []
+                seen_models = set()
+
+                for result in data.get('Results', []):
+                    model_name = result.get('Model_Name', '').strip()
+                    if model_name and model_name not in seen_models:
+                        models.append({
+                            'id': result.get('Model_ID'),
+                            'name': model_name
+                        })
+                        seen_models.add(model_name)
+
+                # Trier par nom
+                models.sort(key=lambda x: x['name'])
+
+                return JsonResponse({
+                    'success': True,
+                    'models': models[:50]  # Limiter à 50 pour la performance
+                })
+
+            return JsonResponse({
+                'success': False,
+                'message': f'Aucun modèle trouvé pour {make}'
+            })
+
+        except Exception as e:
+            logger.error(f"Erreur lors de la récupération des modèles pour {make}: {e}")
+
+            # Fallback avec modèles populaires selon la marque
+            popular_models = {
+                'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Prius', 'Tacoma', 'Tundra', '4Runner'],
+                'Honda': ['Civic', 'Accord', 'CR-V', 'Pilot', 'Fit', 'HR-V', 'Ridgeline', 'Odyssey'],
+                'Ford': ['F-150', 'Escape', 'Explorer', 'Mustang', 'Focus', 'Fusion', 'Edge', 'Ranger'],
+                'Chevrolet': ['Silverado', 'Equinox', 'Malibu', 'Tahoe', 'Camaro', 'Corvette', 'Traverse'],
+                'Nissan': ['Altima', 'Sentra', 'Rogue', 'Pathfinder', 'Murano', 'Frontier', 'Titan', '370Z'],
+            }
+
+            fallback_models = popular_models.get(make, [])
+            models = [{'id': i, 'name': model} for i, model in enumerate(fallback_models)]
+
+            return JsonResponse({
+                'success': True,
+                'models': models,
+                'fallback': True,
+                'message': f'Utilisation de la liste locale pour {make} (API indisponible)'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
 # ==================== GESTION DES DÉPENSES ====================
 
 @login_required

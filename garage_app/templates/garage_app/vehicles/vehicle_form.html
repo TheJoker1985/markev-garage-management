@@ -31,6 +31,9 @@
                             {% if form.make.errors %}
                                 <div class="text-danger">{{ form.make.errors }}</div>
                             {% endif %}
+                            <div class="form-text">
+                                <small class="text-muted">Sélectionnez dans la liste</small>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label for="{{ form.model.id_for_label }}" class="form-label">{{ form.model.label }} *</label>
@@ -38,6 +41,12 @@
                             {% if form.model.errors %}
                                 <div class="text-danger">{{ form.model.errors }}</div>
                             {% endif %}
+                            <div class="form-text">
+                                <small class="text-muted">Sélectionnez d'abord une marque</small>
+                                <button type="button" class="btn btn-sm btn-outline-info mt-2" id="identify-vehicle-btn" disabled>
+                                    <i class="fas fa-search me-1"></i>Identifier le type
+                                </button>
+                            </div>
                         </div>
                         <div class="col-md-4">
                             <label for="{{ form.year.id_for_label }}" class="form-label">{{ form.year.label }} *</label>
@@ -49,14 +58,24 @@
                     </div>
                     
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label for="{{ form.vehicle_type.id_for_label }}" class="form-label">{{ form.vehicle_type.label }}</label>
+                            {{ form.vehicle_type }}
+                            {% if form.vehicle_type.errors %}
+                                <div class="text-danger">{{ form.vehicle_type.errors }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                <small class="text-muted">Sera identifié automatiquement si laissé vide</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="{{ form.color.id_for_label }}" class="form-label">{{ form.color.label }}</label>
                             {{ form.color }}
                             {% if form.color.errors %}
                                 <div class="text-danger">{{ form.color.errors }}</div>
                             {% endif %}
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label for="{{ form.license_plate.id_for_label }}" class="form-label">{{ form.license_plate.label }}</label>
                             {{ form.license_plate }}
                             {% if form.license_plate.errors %}
@@ -98,9 +117,275 @@
                 <ul class="small">
                     <li>La plaque d'immatriculation aide à identifier rapidement le véhicule</li>
                     <li>Utilisez les notes pour des informations spéciales (modifications, etc.)</li>
+                    <li>Le type de véhicule peut être identifié automatiquement</li>
                 </ul>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Styles pour les selects améliorés */
+.form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 16px 12px;
+}
+
+.form-select:disabled {
+    background-color: #e9ecef;
+    opacity: 0.65;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const identifyBtn = document.getElementById('identify-vehicle-btn');
+    const makeField = document.getElementById('id_make');
+    const modelField = document.getElementById('id_model');
+    const yearField = document.getElementById('{{ form.year.id_for_label }}');
+    const vehicleTypeField = document.getElementById('{{ form.vehicle_type.id_for_label }}');
+
+    // Charger les marques au démarrage
+    loadMakes();
+
+    // Événement changement de marque
+    makeField.addEventListener('change', function() {
+        const selectedMake = this.value;
+
+        if (selectedMake) {
+            // Activer le champ modèle et charger les modèles
+            modelField.disabled = false;
+            modelField.innerHTML = '<option value="">Chargement...</option>';
+            loadModels(selectedMake);
+
+            // Activer le bouton d'identification si année aussi remplie
+            updateIdentifyButton();
+        } else {
+            // Désactiver le champ modèle
+            modelField.disabled = true;
+            modelField.innerHTML = '<option value="">Sélectionnez d\'abord une marque</option>';
+            identifyBtn.disabled = true;
+        }
+    });
+
+    // Événement changement de modèle
+    modelField.addEventListener('change', function() {
+        updateIdentifyButton();
+    });
+
+    // Événement changement d'année
+    yearField.addEventListener('input', function() {
+        updateIdentifyButton();
+
+        // Recharger les modèles si une marque est sélectionnée
+        const selectedMake = makeField.value;
+        if (selectedMake) {
+            loadModels(selectedMake);
+        }
+    });
+
+    function updateIdentifyButton() {
+        const make = makeField.value;
+        const model = modelField.value;
+        const year = yearField.value;
+
+        identifyBtn.disabled = !(make && model && year);
+    }
+
+    function loadMakes() {
+        console.log('Chargement des marques...');
+
+        fetch('{% url "garage_app:get_vehicle_makes" %}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`${data.makes.length} marques chargées`);
+
+                    // Vider le select et ajouter l'option par défaut
+                    makeField.innerHTML = '<option value="">Sélectionnez une marque...</option>';
+
+                    // Ajouter toutes les marques
+                    data.makes.forEach(make => {
+                        const option = document.createElement('option');
+                        option.value = make.name;
+                        option.textContent = make.name;
+                        makeField.appendChild(option);
+                    });
+
+                    console.log('Marques ajoutées au select');
+                } else {
+                    console.error('Erreur lors du chargement des marques:', data.message);
+                    // Fallback avec marques populaires
+                    loadFallbackMakes();
+                }
+            })
+            .catch(error => {
+                console.error('Erreur réseau lors du chargement des marques:', error);
+                loadFallbackMakes();
+            });
+    }
+
+    function loadFallbackMakes() {
+        const popularMakes = [
+            'Acura', 'Audi', 'BMW', 'Buick', 'Cadillac', 'Chevrolet', 'Chrysler',
+            'Dodge', 'Ford', 'GMC', 'Honda', 'Hyundai', 'Infiniti', 'Jeep',
+            'Kia', 'Lexus', 'Lincoln', 'Mazda', 'Mercedes-Benz', 'Mitsubishi',
+            'Nissan', 'Pontiac', 'Porsche', 'Ram', 'Subaru', 'Toyota', 'Volkswagen', 'Volvo'
+        ];
+
+        makeField.innerHTML = '<option value="">Sélectionnez une marque...</option>';
+
+        popularMakes.forEach(make => {
+            const option = document.createElement('option');
+            option.value = make;
+            option.textContent = make;
+            makeField.appendChild(option);
+        });
+
+        console.log('Marques de fallback chargées');
+    }
+
+    function loadModels(make) {
+        console.log(`Chargement des modèles pour ${make}...`);
+
+        const year = yearField.value.trim();
+        let url = `{% url "garage_app:get_vehicle_models" %}?make=${encodeURIComponent(make)}`;
+        if (year) {
+            url += `&year=${encodeURIComponent(year)}`;
+        }
+
+        // Afficher un spinner de chargement
+        modelField.innerHTML = '<option value="">🔄 Chargement...</option>';
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`${data.models.length} modèles chargés pour ${make}`);
+
+                    // Vider le select et ajouter l'option par défaut
+                    modelField.innerHTML = '<option value="">Sélectionnez un modèle...</option>';
+
+                    // Ajouter tous les modèles
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.name;
+                        option.textContent = model.name;
+                        modelField.appendChild(option);
+                    });
+
+                    console.log('Modèles ajoutés au select');
+                } else {
+                    console.error('Erreur lors du chargement des modèles:', data.message);
+                    modelField.innerHTML = '<option value="">Aucun modèle trouvé</option>';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur réseau lors du chargement des modèles:', error);
+                modelField.innerHTML = '<option value="">Erreur de chargement</option>';
+            });
+    }
+
+    if (identifyBtn) {
+        identifyBtn.addEventListener('click', function() {
+            const make = makeField.value.trim();
+            const model = modelField.value.trim();
+            const year = yearField.value.trim();
+
+            if (!make || !model || !year) {
+                alert('Veuillez remplir la marque, le modèle et l\'année avant d\'identifier le type.');
+                return;
+            }
+
+            // Désactiver le bouton pendant la requête
+            identifyBtn.disabled = true;
+            identifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Identification...';
+
+            // Appel AJAX pour identifier le type
+            fetch('{% url "garage_app:identify_vehicle_type" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    make: make,
+                    model: model,
+                    year: parseInt(year)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.vehicle_type_id) {
+                    // Sélectionner le type identifié
+                    vehicleTypeField.value = data.vehicle_type_id;
+
+                    // Afficher un message de succès
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'alert alert-success alert-dismissible fade show mt-2';
+                    successMsg.innerHTML = `
+                        <i class="fas fa-check-circle me-1"></i>
+                        Type identifié : ${data.vehicle_type_name}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    identifyBtn.parentNode.appendChild(successMsg);
+
+                    // Supprimer le message après 5 secondes
+                    setTimeout(() => {
+                        if (successMsg.parentNode) {
+                            successMsg.remove();
+                        }
+                    }, 5000);
+                } else {
+                    // Afficher un message d'information
+                    const infoMsg = document.createElement('div');
+                    infoMsg.className = 'alert alert-info alert-dismissible fade show mt-2';
+                    infoMsg.innerHTML = `
+                        <i class="fas fa-info-circle me-1"></i>
+                        ${data.message || 'Type de véhicule non identifié automatiquement. Vous pouvez le sélectionner manuellement.'}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    identifyBtn.parentNode.appendChild(infoMsg);
+
+                    setTimeout(() => {
+                        if (infoMsg.parentNode) {
+                            infoMsg.remove();
+                        }
+                    }, 5000);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                alert('Erreur lors de l\'identification du type de véhicule.');
+            })
+            .finally(() => {
+                // Réactiver le bouton
+                identifyBtn.disabled = false;
+                identifyBtn.innerHTML = '<i class="fas fa-search me-1"></i>Identifier le type';
+            });
+        });
+    }
+});
+</script>
 {% endblock %}
