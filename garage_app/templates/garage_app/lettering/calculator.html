@@ -131,6 +131,59 @@
         box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         color: white;
     }
+
+    /* Styles pour la sélection du type de travail */
+    .work-type-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+
+    .work-type-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+    }
+
+    .work-type-card.selected {
+        border-color: #667eea !important;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    }
+
+    /* Styles pour la section lettrage */
+    .size-options .form-check {
+        margin-bottom: 15px;
+        padding: 10px;
+        border: 1px solid #555;
+        border-radius: 5px;
+        background-color: #2a2a2a;
+    }
+
+    .size-options .form-check:hover {
+        background-color: #3a3a3a;
+    }
+
+    .size-options .form-check-input:checked + .form-check-label {
+        color: #667eea;
+    }
+
+    .lettering-breakdown {
+        background-color: #2a2a2a;
+        border: 1px solid #555;
+        border-radius: 8px;
+        padding: 15px;
+    }
+
+    .count-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 0;
+        color: #e0e0e0;
+    }
+
+    .count-item.total {
+        color: #75b798;
+        font-size: 1.1em;
+        margin-top: 10px;
+    }
     
     .btn-save-quote {
         background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
@@ -167,8 +220,8 @@
         <div class="col-12">
             <div class="calculator-card">
                 <div class="calculator-header">
-                    <h1><i class="fas fa-calculator"></i> Calculateur de Prix - Lettrage</h1>
-                    <p class="mb-0">Calculez automatiquement le prix de vos projets de lettrage</p>
+                    <h1><i class="fas fa-calculator"></i> Calculateur de Prix - Lettrage & Wrapping</h1>
+                    <p class="mb-0">Calculez automatiquement le prix de vos projets de lettrage et wrapping</p>
                 </div>
                 
                 <!-- Indicateur d'étapes -->
@@ -179,14 +232,18 @@
                     </div>
                     <div class="step" id="step-2">
                         <div class="step-number">2</div>
-                        <div class="step-label">Matériaux</div>
+                        <div class="step-label">Type de Travail</div>
                     </div>
                     <div class="step" id="step-3">
                         <div class="step-number">3</div>
-                        <div class="step-label">Main-d'œuvre</div>
+                        <div class="step-label">Spécifications</div>
                     </div>
                     <div class="step" id="step-4">
                         <div class="step-number">4</div>
+                        <div class="step-label">Main-d'œuvre</div>
+                    </div>
+                    <div class="step" id="step-5">
+                        <div class="step-number">5</div>
                         <div class="step-label">Prix Final</div>
                     </div>
                 </div>
@@ -223,10 +280,42 @@
                             <strong>Multiplicateur de complexité:</strong> <span id="complexity_multiplier"></span>
                         </div>
                     </div>
-                    
-                    <!-- Étape 2: Matériaux -->
+
+                    <!-- Étape 2: Type de travail -->
                     <div class="form-section">
-                        <h4><i class="fas fa-layer-group"></i> Matériaux</h4>
+                        <h4><i class="fas fa-tools"></i> Type de travail</h4>
+
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <label class="form-label">Sélectionnez le type de travail :</label>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card work-type-card" data-type="wrapping" style="cursor: pointer; border: 2px solid #555;">
+                                            <div class="card-body text-center">
+                                                <i class="fas fa-car fa-3x text-primary mb-3"></i>
+                                                <h5>Habillage / Wrapping</h5>
+                                                <p class="text-muted">Calcul par surface (m²)</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card work-type-card" data-type="lettering" style="cursor: pointer; border: 2px solid #555;">
+                                            <div class="card-body text-center">
+                                                <i class="fas fa-font fa-3x text-success mb-3"></i>
+                                                <h5>Lettrage Découpé</h5>
+                                                <p class="text-muted">Calcul par caractère</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="work_type" name="work_type" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Étape 3: Matériaux Wrapping -->
+                    <div class="form-section" id="wrapping-section" style="display: none;">
+                        <h4><i class="fas fa-layer-group"></i> Matériaux - Wrapping</h4>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
@@ -278,8 +367,82 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Étape 3: Main-d'œuvre -->
+
+                    <!-- Étape 3: Lettrage -->
+                    <div class="form-section" id="lettering-section" style="display: none;">
+                        <h4><i class="fas fa-font"></i> Lettrage Découpé</h4>
+
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label for="lettering_text">Texte à lettrer *</label>
+                                    <textarea class="form-control" id="lettering_text" name="lettering_text"
+                                              rows="3" placeholder="Saisissez le texte à lettrer (ex: GARAGE MARKEV 2024)"></textarea>
+                                    <small class="form-text text-muted">Saisissez exactement le texte qui sera découpé</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label>Taille des caractères *</label>
+                                    <div class="size-options">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="character_size" id="size_petit" value="petit">
+                                            <label class="form-check-label" for="size_petit">
+                                                <strong>Petit (2-5 cm)</strong><br>
+                                                <small>Lettres: 2,00$ • Symboles: 2,50$</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="character_size" id="size_moyen" value="moyen">
+                                            <label class="form-check-label" for="size_moyen">
+                                                <strong>Moyen (6-15 cm)</strong><br>
+                                                <small>Lettres: 3,50$ • Symboles: 4,40$</small>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="character_size" id="size_grand" value="grand">
+                                            <label class="form-check-label" for="size_grand">
+                                                <strong>Grand (16-30 cm)</strong><br>
+                                                <small>Lettres: 5,00$ • Symboles: 6,25$</small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="lettering-breakdown">
+                                    <h6>Détail du calcul :</h6>
+                                    <div id="character-count">
+                                        <div class="count-item">
+                                            <span>Lettres/Chiffres:</span>
+                                            <span id="letter-count">0</span> ×
+                                            <span id="letter-price">0,00$</span> =
+                                            <span id="letter-total">0,00$</span>
+                                        </div>
+                                        <div class="count-item">
+                                            <span>Symboles:</span>
+                                            <span id="symbol-count">0</span> ×
+                                            <span id="symbol-price">0,00$</span> =
+                                            <span id="symbol-total">0,00$</span>
+                                        </div>
+                                        <div class="count-item">
+                                            <span>Espaces:</span>
+                                            <span id="space-count">0</span> (gratuits)
+                                        </div>
+                                        <hr>
+                                        <div class="count-item total">
+                                            <strong>TOTAL LETTRAGE: <span id="lettering-total">0,00$</span></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Étape 4: Main-d'œuvre -->
                     <div class="form-section">
                         <h4><i class="fas fa-clock"></i> Main-d'œuvre</h4>
                         <div class="row">
@@ -372,7 +535,123 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveQuoteBtn = document.getElementById('saveQuoteBtn');
     const resultsSection = document.getElementById('resultsSection');
     const costBreakdown = document.getElementById('costBreakdown');
-    
+
+    // Prix du lettrage selon le tableau fourni
+    const letteringPrices = {
+        'petit': {
+            'letter': 2.00,
+            'symbol': 2.50
+        },
+        'moyen': {
+            'letter': 3.50,
+            'symbol': 4.40
+        },
+        'grand': {
+            'letter': 5.00,
+            'symbol': 6.25
+        }
+    };
+
+    // Gestion de la sélection du type de travail
+    document.querySelectorAll('.work-type-card').forEach(card => {
+        card.addEventListener('click', function() {
+            // Retirer la sélection précédente
+            document.querySelectorAll('.work-type-card').forEach(c => c.classList.remove('selected'));
+
+            // Ajouter la sélection à la carte cliquée
+            this.classList.add('selected');
+
+            // Mettre à jour le champ caché
+            const workType = this.dataset.type;
+            document.getElementById('work_type').value = workType;
+
+            // Afficher/masquer les sections appropriées
+            const wrappingSection = document.getElementById('wrapping-section');
+            const letteringSection = document.getElementById('lettering-section');
+
+            if (workType === 'wrapping') {
+                wrappingSection.style.display = 'block';
+                letteringSection.style.display = 'none';
+            } else if (workType === 'lettering') {
+                wrappingSection.style.display = 'none';
+                letteringSection.style.display = 'block';
+            }
+        });
+    });
+
+    // Fonction pour compter les caractères
+    function countCharacters(text) {
+        const counts = {
+            letters: 0,
+            symbols: 0,
+            spaces: 0
+        };
+
+        for (let char of text) {
+            if (char === ' ') {
+                counts.spaces++;
+            } else if (/[a-zA-Z0-9]/.test(char)) {
+                counts.letters++;
+            } else {
+                counts.symbols++;
+            }
+        }
+
+        return counts;
+    }
+
+    // Fonction pour calculer le prix du lettrage
+    function calculateLetteringPrice() {
+        const text = document.getElementById('lettering_text').value;
+        const sizeRadios = document.querySelectorAll('input[name="character_size"]');
+        let selectedSize = null;
+
+        // Trouver la taille sélectionnée
+        sizeRadios.forEach(radio => {
+            if (radio.checked) {
+                selectedSize = radio.value;
+            }
+        });
+
+        if (!text || !selectedSize) {
+            // Réinitialiser l'affichage si pas de données
+            document.getElementById('letter-count').textContent = '0';
+            document.getElementById('symbol-count').textContent = '0';
+            document.getElementById('space-count').textContent = '0';
+            document.getElementById('letter-price').textContent = '0,00$';
+            document.getElementById('symbol-price').textContent = '0,00$';
+            document.getElementById('letter-total').textContent = '0,00$';
+            document.getElementById('symbol-total').textContent = '0,00$';
+            document.getElementById('lettering-total').textContent = '0,00$';
+            return 0;
+        }
+
+        const counts = countCharacters(text);
+        const prices = letteringPrices[selectedSize];
+
+        const letterTotal = counts.letters * prices.letter;
+        const symbolTotal = counts.symbols * prices.symbol;
+        const total = letterTotal + symbolTotal;
+
+        // Mettre à jour l'affichage
+        document.getElementById('letter-count').textContent = counts.letters;
+        document.getElementById('symbol-count').textContent = counts.symbols;
+        document.getElementById('space-count').textContent = counts.spaces;
+        document.getElementById('letter-price').textContent = prices.letter.toFixed(2) + '$';
+        document.getElementById('symbol-price').textContent = prices.symbol.toFixed(2) + '$';
+        document.getElementById('letter-total').textContent = letterTotal.toFixed(2) + '$';
+        document.getElementById('symbol-total').textContent = symbolTotal.toFixed(2) + '$';
+        document.getElementById('lettering-total').textContent = total.toFixed(2) + '$';
+
+        return total;
+    }
+
+    // Événements pour le calcul automatique du lettrage
+    document.getElementById('lettering_text').addEventListener('input', calculateLetteringPrice);
+    document.querySelectorAll('input[name="character_size"]').forEach(radio => {
+        radio.addEventListener('change', calculateLetteringPrice);
+    });
+
     // Gestion du changement de client
     document.getElementById('client_id').addEventListener('change', function() {
         const clientId = this.value;
