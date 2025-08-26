@@ -263,6 +263,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if 'lettering' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:lettering_calculator' %}">
+                        <i class="fas fa-calculator me-2"></i>Calculateur Lettrage
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:invoice_list' %}">
                         <i class="fas fa-file-invoice me-2"></i>Factures
                     </a>

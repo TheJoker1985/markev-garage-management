@@ -3,7 +3,8 @@ from django.utils.html import format_html
 from .models import (
     CompanyProfile, Client, Vehicle, VehicleType, Service, ServiceConsumption,
     InventoryItem, StockAlert, Invoice, InvoiceItem, Expense, FiscalYearArchive,
-    Supplier, RecurringExpense, Appointment, StockReceipt, StockReceiptItem
+    Supplier, RecurringExpense, Appointment, StockReceipt, StockReceiptItem,
+    Material, LaborRate, OverheadConfiguration, LetteringQuote
 )
 
 
@@ -91,26 +92,7 @@ class SupplierAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(VehicleType)
-class VehicleTypeAdmin(admin.ModelAdmin):
-    list_display = ['name', 'description', 'is_active', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name', 'description']
-    readonly_fields = ['created_at', 'updated_at']
-
-    fieldsets = (
-        ('Informations de base', {
-            'fields': ('name', 'description', 'is_active')
-        }),
-        ('Configuration API NHTSA', {
-            'fields': ('nhtsa_body_classes',),
-            'description': 'Liste des classes de carrosserie NHTSA correspondant à ce type (format JSON)'
-        }),
-        ('Métadonnées', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
+# VehicleTypeAdmin est défini plus bas avec les fonctionnalités de lettrage
 
 
 @admin.register(Vehicle)
@@ -718,6 +700,157 @@ class StockReceiptItemAdmin(admin.ModelAdmin):
     list_filter = ['stock_receipt__status', 'stock_receipt__receipt_date']
     search_fields = ['stock_receipt__receipt_number', 'inventory_item__name']
     readonly_fields = ['total_price', 'created_at', 'updated_at']
+
+
+# ==================== CALCULATEUR DE LETTRAGE ====================
+
+@admin.register(Material)
+class MaterialAdmin(admin.ModelAdmin):
+    list_display = ['name', 'type', 'cost_per_sqm', 'supplier', 'is_active', 'created_at']
+    list_filter = ['type', 'is_active', 'supplier']
+    search_fields = ['name', 'supplier', 'notes']
+    list_editable = ['cost_per_sqm', 'is_active']
+    ordering = ['type', 'name']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('name', 'type', 'cost_per_sqm')
+        }),
+        ('Détails', {
+            'fields': ('supplier', 'notes', 'is_active')
+        }),
+        ('Dates', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(LaborRate)
+class LaborRateAdmin(admin.ModelAdmin):
+    list_display = ['task_type', 'hourly_rate', 'is_active', 'updated_at']
+    list_filter = ['task_type', 'is_active']
+    search_fields = ['task_type', 'description']
+    list_editable = ['hourly_rate', 'is_active']
+    ordering = ['task_type']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('task_type', 'hourly_rate', 'is_active')
+        }),
+        ('Description', {
+            'fields': ('description',)
+        }),
+        ('Dates', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(OverheadConfiguration)
+class OverheadConfigurationAdmin(admin.ModelAdmin):
+    list_display = ['name', 'hourly_overhead_cost', 'fixed_overhead_cost', 'percentage_overhead', 'is_default', 'is_active']
+    list_filter = ['is_active', 'is_default']
+    search_fields = ['name']
+    list_editable = ['hourly_overhead_cost', 'fixed_overhead_cost', 'percentage_overhead', 'is_active']
+    ordering = ['-is_default', 'name']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('name', 'is_default', 'is_active')
+        }),
+        ('Configuration des frais', {
+            'fields': ('hourly_overhead_cost', 'fixed_overhead_cost', 'percentage_overhead'),
+            'description': 'Configurez les différents types de frais généraux à appliquer'
+        }),
+        ('Dates', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+
+    def save_model(self, request, obj, form, change):
+        # S'assurer qu'il n'y a qu'une seule configuration par défaut
+        if obj.is_default:
+            OverheadConfiguration.objects.filter(is_default=True).exclude(pk=obj.pk).update(is_default=False)
+        super().save_model(request, obj, form, change)
+
+
+# Mise à jour de VehicleTypeAdmin pour inclure le nouveau champ
+@admin.register(VehicleType)
+class VehicleTypeAdmin(admin.ModelAdmin):
+    list_display = ['name', 'complexity_multiplier', 'is_active', 'created_at']
+    list_filter = ['is_active']
+    search_fields = ['name', 'description']
+    list_editable = ['complexity_multiplier', 'is_active']
+    ordering = ['name']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('name', 'description', 'is_active')
+        }),
+        ('Configuration lettrage', {
+            'fields': ('complexity_multiplier',),
+            'description': 'Multiplicateur de complexité pour le calcul des prix de lettrage'
+        }),
+        ('Configuration NHTSA', {
+            'fields': ('nhtsa_body_classes',),
+            'classes': ('collapse',)
+        }),
+        ('Dates', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(LetteringQuote)
+class LetteringQuoteAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'client', 'vehicle', 'surface_area', 'final_price_with_taxes', 'is_converted_to_quote', 'created_at']
+    list_filter = ['is_converted_to_quote', 'vinyl_material__type', 'created_at']
+    search_fields = ['client__first_name', 'client__last_name', 'vehicle__make', 'vehicle__model']
+    readonly_fields = ['material_cost', 'labor_cost', 'overhead_cost', 'total_cost', 'final_price', 'gst_amount', 'qst_amount', 'final_price_with_taxes', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('Informations de base', {
+            'fields': ('client', 'vehicle')
+        }),
+        ('Paramètres du projet', {
+            'fields': ('surface_area', 'waste_percentage', 'notes')
+        }),
+        ('Matériaux', {
+            'fields': ('vinyl_material', 'lamination_material')
+        }),
+        ('Temps de travail', {
+            'fields': ('design_hours', 'installation_hours')
+        }),
+        ('Configuration', {
+            'fields': ('overhead_config', 'profit_margin')
+        }),
+        ('Coûts calculés', {
+            'fields': ('material_cost', 'labor_cost', 'overhead_cost', 'total_cost', 'final_price', 'gst_amount', 'qst_amount', 'final_price_with_taxes'),
+            'classes': ('collapse',),
+            'description': 'Ces coûts sont calculés automatiquement'
+        }),
+        ('Conversion', {
+            'fields': ('is_converted_to_quote', 'related_quote'),
+            'classes': ('collapse',)
+        }),
+        ('Métadonnées', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def save_model(self, request, obj, form, change):
+        # Recalculer les coûts avant la sauvegarde
+        obj.calculate_costs()
+        super().save_model(request, obj, form, change)
 
 
 # Personnalisation de l'interface d'administration

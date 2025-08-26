@@ -152,6 +152,15 @@ class VehicleType(models.Model):
 
     is_active = models.BooleanField(default=True, verbose_name="Type actif")
 
+    # Champ pour le calculateur de lettrage
+    complexity_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=1.0,
+        verbose_name="Multiplicateur de complexité",
+        help_text="Multiplicateur de complexité pour le lettrage (ex: Berline=1.0, Sprinter=1.6)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1689,6 +1698,8 @@ class Quote(models.Model):
         ('converted', 'Convertie en facture'),
     ]
 
+
+
     # Informations de base
     quote_number = models.CharField(max_length=20, unique=True, verbose_name="Numéro de soumission")
     date = models.DateField(default=date.today, verbose_name="Date de création")
@@ -1846,6 +1857,14 @@ class QuoteItem(models.Model):
     description = models.TextField(blank=True, null=True, verbose_name="Description personnalisée")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Prix")
 
+    # Détails spécifiques au lettrage (stockés en JSON)
+    lettering_details = models.JSONField(
+        blank=True,
+        null=True,
+        verbose_name="Détails du lettrage",
+        help_text="Détails du calcul de lettrage (surface, matériaux, heures, etc.)"
+    )
+
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
@@ -1879,3 +1898,406 @@ class QuoteItem(models.Model):
         # Recalculer les totaux de la soumission
         if self.quote_id:
             self.quote.calculate_totals()
+
+
+# ==================== CALCULATEUR DE LETTRAGE ====================
+
+class Material(models.Model):
+    """Matériaux pour le lettrage (vinyles, laminations, encres)"""
+
+    MATERIAL_TYPES = [
+        ('vinyle', 'Vinyle'),
+        ('vinyle_decoupe', 'Vinyle Découpé'),
+        ('lamination', 'Lamination'),
+        ('encre', 'Encre'),
+        ('autre', 'Autre'),
+    ]
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name="Nom du matériau",
+        help_text="Ex: Vinyle Coulé 3M IJ180Cv3, Lamination Lustrée"
+    )
+    type = models.CharField(
+        max_length=20,
+        choices=MATERIAL_TYPES,
+        verbose_name="Type de matériau"
+    )
+    cost_per_sqm = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        verbose_name="Coût par m²",
+        help_text="Coût par mètre carré en CAD"
+    )
+    supplier = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="Fournisseur"
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Notes",
+        help_text="Informations supplémentaires sur ce matériau"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Matériau actif"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Matériau"
+        verbose_name_plural = "Matériaux"
+        ordering = ['type', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_type_display()}) - {self.cost_per_sqm}$/m²"
+
+
+class LaborRate(models.Model):
+    """Taux horaires pour différents types de tâches"""
+
+    TASK_TYPES = [
+        ('conception', 'Conception Graphique'),
+        ('installation', 'Installation'),
+        ('echenillage', 'Échenillage'),
+        ('preparation', 'Préparation'),
+        ('finition', 'Finition'),
+    ]
+
+    task_type = models.CharField(
+        max_length=20,
+        choices=TASK_TYPES,
+        unique=True,
+        verbose_name="Type de tâche"
+    )
+    hourly_rate = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        verbose_name="Taux horaire",
+        help_text="Votre taux facturable par heure en CAD"
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name="Description",
+        help_text="Description de ce type de tâche"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Taux actif"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Taux horaire"
+        verbose_name_plural = "Taux horaires"
+        ordering = ['task_type']
+
+    def __str__(self):
+        return f"{self.get_task_type_display()} - {self.hourly_rate}$/h"
+
+
+class OverheadConfiguration(models.Model):
+    """Configuration des frais généraux pour le lettrage"""
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name="Nom de la configuration",
+        help_text="Ex: Configuration Standard, Configuration Premium"
+    )
+    hourly_overhead_cost = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        verbose_name="Frais généraux par heure",
+        help_text="Montant fixe en CAD à ajouter pour chaque heure de travail"
+    )
+    fixed_overhead_cost = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        verbose_name="Frais fixes",
+        help_text="Montant fixe en CAD à ajouter à chaque projet"
+    )
+    percentage_overhead = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Pourcentage de frais généraux",
+        help_text="Pourcentage du coût total à ajouter comme frais généraux"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Configuration active"
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name="Configuration par défaut"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuration frais généraux"
+        verbose_name_plural = "Configurations frais généraux"
+        ordering = ['-is_default', 'name']
+
+    def __str__(self):
+        default_text = " (Défaut)" if self.is_default else ""
+        return f"{self.name}{default_text}"
+
+    def save(self, *args, **kwargs):
+        # S'assurer qu'il n'y a qu'une seule configuration par défaut
+        if self.is_default:
+            OverheadConfiguration.objects.filter(is_default=True).update(is_default=False)
+        super().save(*args, **kwargs)
+
+
+class LetteringQuote(models.Model):
+    """Soumission de lettrage avec calcul automatique"""
+
+    # Informations de base
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, verbose_name="Client")
+    vehicle = models.ForeignKey('Vehicle', on_delete=models.CASCADE, verbose_name="Véhicule")
+
+    # Paramètres du projet
+    surface_area = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        verbose_name="Surface totale (m²)",
+        help_text="Surface totale à couvrir en mètres carrés"
+    )
+    waste_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=15.0,
+        verbose_name="Taux de perte (%)",
+        help_text="Pourcentage de perte de matériau"
+    )
+
+    # Matériaux sélectionnés
+    vinyl_material = models.ForeignKey(
+        'Material',
+        on_delete=models.PROTECT,
+        related_name='vinyl_quotes',
+        limit_choices_to={'type': 'vinyle'},
+        verbose_name="Vinyle"
+    )
+    lamination_material = models.ForeignKey(
+        'Material',
+        on_delete=models.PROTECT,
+        related_name='lamination_quotes',
+        limit_choices_to={'type': 'lamination'},
+        blank=True,
+        null=True,
+        verbose_name="Lamination"
+    )
+
+    # Temps de travail
+    design_hours = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        verbose_name="Heures de conception",
+        help_text="Temps estimé pour la conception graphique"
+    )
+    installation_hours = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        verbose_name="Heures d'installation",
+        help_text="Temps estimé pour l'installation"
+    )
+
+    # Configuration utilisée
+    overhead_config = models.ForeignKey(
+        'OverheadConfiguration',
+        on_delete=models.PROTECT,
+        verbose_name="Configuration frais généraux"
+    )
+
+    # Marge bénéficiaire
+    profit_margin = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=30.0,
+        verbose_name="Marge bénéficiaire (%)",
+        help_text="Marge bénéficiaire en pourcentage"
+    )
+
+    # Coûts calculés (en lecture seule)
+    material_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Coût matériaux",
+        help_text="Coût total des matériaux calculé automatiquement"
+    )
+    labor_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Coût main-d'œuvre",
+        help_text="Coût total de la main-d'œuvre calculé automatiquement"
+    )
+    overhead_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Frais généraux",
+        help_text="Frais généraux calculés automatiquement"
+    )
+    total_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Coût total",
+        help_text="Coût total avant marge"
+    )
+    final_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Prix avant taxes",
+        help_text="Prix avec marge bénéficiaire avant taxes"
+    )
+    gst_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Montant TPS",
+        help_text="Montant de la TPS (5%)"
+    )
+    qst_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Montant TVQ",
+        help_text="Montant de la TVQ (9.975%)"
+    )
+    final_price_with_taxes = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name="Prix final avec taxes",
+        help_text="Prix final incluant toutes les taxes"
+    )
+
+    # Métadonnées
+    notes = models.TextField(
+        blank=True,
+        verbose_name="Notes",
+        help_text="Notes supplémentaires sur ce projet"
+    )
+    is_converted_to_quote = models.BooleanField(
+        default=False,
+        verbose_name="Converti en soumission",
+        help_text="Indique si ce calcul a été converti en soumission officielle"
+    )
+    related_quote = models.ForeignKey(
+        'Quote',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name="Soumission liée",
+        help_text="Soumission officielle créée à partir de ce calcul"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Calcul de lettrage"
+        verbose_name_plural = "Calculs de lettrage"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Lettrage {self.vehicle} - {self.final_price_with_taxes}$ taxes incl. ({self.created_at.strftime('%Y-%m-%d')})"
+
+    def calculate_costs(self):
+        """Calcule tous les coûts automatiquement"""
+        from decimal import Decimal
+
+        # 1. Coût des matériaux
+        surface_with_waste = self.surface_area * (1 + self.waste_percentage / 100)
+
+        # Coût du vinyle
+        vinyl_cost = surface_with_waste * self.vinyl_material.cost_per_sqm
+
+        # Coût de la lamination (si applicable)
+        lamination_cost = Decimal('0')
+        if self.lamination_material:
+            lamination_cost = surface_with_waste * self.lamination_material.cost_per_sqm
+
+        self.material_cost = vinyl_cost + lamination_cost
+
+        # 2. Coût de la main-d'œuvre
+        design_rate = LaborRate.objects.filter(task_type='conception', is_active=True).first()
+        installation_rate = LaborRate.objects.filter(task_type='installation', is_active=True).first()
+
+        design_cost = Decimal('0')
+        if design_rate and self.design_hours:
+            design_cost = self.design_hours * design_rate.hourly_rate
+
+        installation_cost = Decimal('0')
+        if installation_rate and self.installation_hours:
+            # Appliquer le multiplicateur de complexité du véhicule
+            complexity_multiplier = self.vehicle.vehicle_type.complexity_multiplier if self.vehicle.vehicle_type else Decimal('1.0')
+            installation_cost = self.installation_hours * installation_rate.hourly_rate * complexity_multiplier
+
+        self.labor_cost = design_cost + installation_cost
+
+        # 3. Frais généraux
+        total_hours = self.design_hours + self.installation_hours
+        hourly_overhead = total_hours * self.overhead_config.hourly_overhead_cost
+        fixed_overhead = self.overhead_config.fixed_overhead_cost
+
+        # Coût de base pour le calcul du pourcentage
+        base_cost = self.material_cost + self.labor_cost
+        percentage_overhead = base_cost * (self.overhead_config.percentage_overhead / 100)
+
+        self.overhead_cost = hourly_overhead + fixed_overhead + percentage_overhead
+
+        # 4. Coût total
+        self.total_cost = self.material_cost + self.labor_cost + self.overhead_cost
+
+        # 5. Prix avec marge (avant taxes)
+        self.final_price = self.total_cost * (1 + self.profit_margin / 100)
+
+        # 6. Calcul des taxes (Québec)
+        gst_rate = Decimal('0.05')  # TPS 5%
+        qst_rate = Decimal('0.09975')  # TVQ 9.975%
+
+        self.gst_amount = self.final_price * gst_rate
+        self.qst_amount = self.final_price * qst_rate
+        self.final_price_with_taxes = self.final_price + self.gst_amount + self.qst_amount
+
+        return {
+            'material_cost': self.material_cost,
+            'labor_cost': self.labor_cost,
+            'overhead_cost': self.overhead_cost,
+            'total_cost': self.total_cost,
+            'final_price': self.final_price,
+            'gst_amount': self.gst_amount,
+            'qst_amount': self.qst_amount,
+            'final_price_with_taxes': self.final_price_with_taxes
+        }
+
+    def save(self, *args, **kwargs):
+        # Calculer automatiquement les coûts avant la sauvegarde
+        self.calculate_costs()
+        super().save(*args, **kwargs)
+
+    def get_cost_breakdown(self):
+        """Retourne un détail des coûts pour l'affichage"""
+        return {
+            'surface_with_waste': self.surface_area * (1 + self.waste_percentage / 100),
+            'vinyl_cost': self.surface_area * (1 + self.waste_percentage / 100) * self.vinyl_material.cost_per_sqm,
+            'lamination_cost': (self.surface_area * (1 + self.waste_percentage / 100) * self.lamination_material.cost_per_sqm) if self.lamination_material else 0,
+            'design_cost': self.design_hours * LaborRate.objects.filter(task_type='conception', is_active=True).first().hourly_rate if LaborRate.objects.filter(task_type='conception', is_active=True).exists() else 0,
+            'installation_cost': self.installation_hours * LaborRate.objects.filter(task_type='installation', is_active=True).first().hourly_rate * (self.vehicle.vehicle_type.complexity_multiplier if self.vehicle.vehicle_type else 1) if LaborRate.objects.filter(task_type='installation', is_active=True).exists() else 0,
+            'complexity_multiplier': self.vehicle.vehicle_type.complexity_multiplier if self.vehicle.vehicle_type else 1,
+        }

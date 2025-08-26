@@ -1,0 +1,580 @@
+{% extends 'garage_app/base.html' %}
+{% load static %}
+
+{% block title %}Calculateur de Prix - Lettrage{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calculator-card {
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    
+    .calculator-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px 10px 0 0;
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 30px;
+        padding: 0 20px;
+    }
+    
+    .step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+    }
+    
+    .step::after {
+        content: '';
+        position: absolute;
+        top: 15px;
+        right: -50%;
+        width: 100%;
+        height: 2px;
+        background: #e0e0e0;
+        z-index: 1;
+    }
+    
+    .step:last-child::after {
+        display: none;
+    }
+    
+    .step.active::after {
+        background: #667eea;
+    }
+    
+    .step-number {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: #e0e0e0;
+        color: #666;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-bottom: 5px;
+        position: relative;
+        z-index: 2;
+    }
+    
+    .step.active .step-number {
+        background: #667eea;
+        color: white;
+    }
+    
+    .step.completed .step-number {
+        background: #28a745;
+        color: white;
+    }
+    
+    .form-section {
+        padding: 20px;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .form-section:last-child {
+        border-bottom: none;
+    }
+    
+    .cost-breakdown {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .cost-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .cost-item:last-child {
+        border-bottom: none;
+        font-weight: bold;
+        font-size: 1.1em;
+        color: #28a745;
+    }
+    
+    .cost-item.total {
+        border-top: 2px solid #28a745;
+        margin-top: 10px;
+        padding-top: 15px;
+    }
+    
+    .btn-calculate {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-calculate:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+    
+    .btn-save-quote {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+        color: white;
+        padding: 12px 30px;
+        border-radius: 25px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-save-quote:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        color: white;
+    }
+    
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    
+    .alert-calculation {
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        border: 1px solid #667eea;
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="calculator-card">
+                <div class="calculator-header">
+                    <h1><i class="fas fa-calculator"></i> Calculateur de Prix - Lettrage</h1>
+                    <p class="mb-0">Calculez automatiquement le prix de vos projets de lettrage</p>
+                </div>
+                
+                <!-- Indicateur d'étapes -->
+                <div class="step-indicator mt-4">
+                    <div class="step active" id="step-1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Client & Véhicule</div>
+                    </div>
+                    <div class="step" id="step-2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Matériaux</div>
+                    </div>
+                    <div class="step" id="step-3">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Main-d'œuvre</div>
+                    </div>
+                    <div class="step" id="step-4">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Prix Final</div>
+                    </div>
+                </div>
+                
+                <form id="letteringForm">
+                    {% csrf_token %}
+                    
+                    <!-- Étape 1: Client & Véhicule -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-user"></i> Informations de Base</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="client_id">Client *</label>
+                                    <select class="form-control" id="client_id" name="client_id" required>
+                                        <option value="">Sélectionnez un client...</option>
+                                        {% for client in clients %}
+                                            <option value="{{ client.id }}">{{ client.first_name }} {{ client.last_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="vehicle_id">Véhicule *</label>
+                                    <select class="form-control" id="vehicle_id" name="vehicle_id" required disabled>
+                                        <option value="">Sélectionnez d'abord un client...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="vehicle_info" class="alert alert-info" style="display: none;">
+                            <strong>Véhicule sélectionné:</strong> <span id="vehicle_details"></span><br>
+                            <strong>Multiplicateur de complexité:</strong> <span id="complexity_multiplier"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Étape 2: Matériaux -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-layer-group"></i> Matériaux</h4>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="surface_area">Surface totale (m²) *</label>
+                                    <input type="number" class="form-control" id="surface_area" name="surface_area" 
+                                           step="0.01" min="0.01" required>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="waste_percentage">Taux de perte (%)</label>
+                                    <input type="number" class="form-control" id="waste_percentage" name="waste_percentage" 
+                                           value="15" step="0.1" min="0" max="50">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label>Surface avec perte</label>
+                                    <input type="text" class="form-control" id="surface_with_waste" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="vinyl_material_id">Vinyle *</label>
+                                    <select class="form-control" id="vinyl_material_id" name="vinyl_material_id" required>
+                                        <option value="">Sélectionnez un vinyle...</option>
+                                        {% for material in vinyl_materials %}
+                                            <option value="{{ material.id }}" data-cost="{{ material.cost_per_sqm }}">
+                                                {{ material.name }} - {{ material.cost_per_sqm }}$/m²
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="lamination_material_id">Lamination (optionnel)</label>
+                                    <select class="form-control" id="lamination_material_id" name="lamination_material_id">
+                                        <option value="">Aucune lamination</option>
+                                        {% for material in lamination_materials %}
+                                            <option value="{{ material.id }}" data-cost="{{ material.cost_per_sqm }}">
+                                                {{ material.name }} - {{ material.cost_per_sqm }}$/m²
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Étape 3: Main-d'œuvre -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-clock"></i> Main-d'œuvre</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="design_hours">Heures de conception</label>
+                                    <input type="number" class="form-control" id="design_hours" name="design_hours" 
+                                           step="0.25" min="0" value="0">
+                                    <small class="form-text text-muted">Temps pour la création graphique</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="installation_hours">Heures d'installation *</label>
+                                    <input type="number" class="form-control" id="installation_hours" name="installation_hours" 
+                                           step="0.25" min="0.25" required>
+                                    <small class="form-text text-muted">Temps pour la pose du lettrage</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Étape 4: Configuration finale -->
+                    <div class="form-section">
+                        <h4><i class="fas fa-cog"></i> Configuration</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="overhead_config_id">Configuration frais généraux</label>
+                                    <select class="form-control" id="overhead_config_id" name="overhead_config_id">
+                                        {% for config in overhead_configs %}
+                                            <option value="{{ config.id }}" 
+                                                    {% if config.is_default %}selected{% endif %}>
+                                                {{ config.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="profit_margin">Marge bénéficiaire (%)</label>
+                                    <input type="number" class="form-control" id="profit_margin" name="profit_margin" 
+                                           value="30" step="0.1" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="notes">Notes (optionnel)</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                      placeholder="Notes supplémentaires sur ce projet..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Boutons d'action -->
+                    <div class="form-section text-center">
+                        <button type="button" class="btn btn-calculate mr-3" id="calculateBtn">
+                            <i class="fas fa-calculator"></i> Calculer le Prix
+                        </button>
+                        <button type="button" class="btn btn-save-quote" id="saveQuoteBtn" style="display: none;">
+                            <i class="fas fa-save"></i> Créer la Soumission
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Résultats du calcul -->
+    <div class="row" id="resultsSection" style="display: none;">
+        <div class="col-12">
+            <div class="calculator-card">
+                <div class="calculator-header">
+                    <h3><i class="fas fa-chart-line"></i> Détail du Calcul</h3>
+                </div>
+                <div class="cost-breakdown" id="costBreakdown">
+                    <!-- Le détail sera inséré ici par JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('letteringForm');
+    const calculateBtn = document.getElementById('calculateBtn');
+    const saveQuoteBtn = document.getElementById('saveQuoteBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const costBreakdown = document.getElementById('costBreakdown');
+    
+    // Gestion du changement de client
+    document.getElementById('client_id').addEventListener('change', function() {
+        const clientId = this.value;
+        const vehicleSelect = document.getElementById('vehicle_id');
+        
+        if (clientId) {
+            // Charger les véhicules du client
+            fetch(`/clients/${clientId}/vehicles/`)
+                .then(response => response.json())
+                .then(data => {
+                    vehicleSelect.innerHTML = '<option value="">Sélectionnez un véhicule...</option>';
+                    data.vehicles.forEach(vehicle => {
+                        const option = document.createElement('option');
+                        option.value = vehicle.id;
+                        option.textContent = `${vehicle.make} ${vehicle.model} ${vehicle.year || ''}`;
+                        option.dataset.complexity = vehicle.complexity_multiplier || 1.0;
+                        option.dataset.type = vehicle.vehicle_type || 'Non défini';
+                        vehicleSelect.appendChild(option);
+                    });
+                    vehicleSelect.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    vehicleSelect.innerHTML = '<option value="">Erreur de chargement</option>';
+                });
+        } else {
+            vehicleSelect.innerHTML = '<option value="">Sélectionnez d\'abord un client...</option>';
+            vehicleSelect.disabled = true;
+        }
+    });
+    
+    // Gestion du changement de véhicule
+    document.getElementById('vehicle_id').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const vehicleInfo = document.getElementById('vehicle_info');
+        
+        if (this.value) {
+            document.getElementById('vehicle_details').textContent = selectedOption.textContent;
+            document.getElementById('complexity_multiplier').textContent = selectedOption.dataset.complexity + 'x';
+            vehicleInfo.style.display = 'block';
+        } else {
+            vehicleInfo.style.display = 'none';
+        }
+    });
+    
+    // Calcul automatique de la surface avec perte
+    function updateSurfaceWithWaste() {
+        const surface = parseFloat(document.getElementById('surface_area').value) || 0;
+        const waste = parseFloat(document.getElementById('waste_percentage').value) || 0;
+        const surfaceWithWaste = surface * (1 + waste / 100);
+        document.getElementById('surface_with_waste').value = surfaceWithWaste.toFixed(2) + ' m²';
+    }
+    
+    document.getElementById('surface_area').addEventListener('input', updateSurfaceWithWaste);
+    document.getElementById('waste_percentage').addEventListener('input', updateSurfaceWithWaste);
+    
+    // Calcul du prix
+    calculateBtn.addEventListener('click', function() {
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        // Validation
+        if (!data.client_id || !data.vehicle_id || !data.surface_area || !data.vinyl_material_id || !data.installation_hours) {
+            alert('Veuillez remplir tous les champs obligatoires.');
+            return;
+        }
+        
+        // Afficher le loading
+        calculateBtn.classList.add('loading');
+        calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calcul en cours...';
+        
+        // Envoyer la requête
+        fetch('/api/lettering/calculate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                displayResults(result.breakdown);
+                saveQuoteBtn.style.display = 'inline-block';
+                resultsSection.style.display = 'block';
+                
+                // Scroll vers les résultats
+                resultsSection.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                alert('Erreur: ' + result.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Erreur lors du calcul');
+        })
+        .finally(() => {
+            calculateBtn.classList.remove('loading');
+            calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculer le Prix';
+        });
+    });
+    
+    // Affichage des résultats
+    function displayResults(breakdown) {
+        const html = `
+            <div class="cost-item">
+                <span>Surface avec perte (${breakdown.surface_with_waste.toFixed(2)} m²)</span>
+                <span></span>
+            </div>
+            <div class="cost-item">
+                <span>• Coût vinyle</span>
+                <span>${breakdown.vinyl_cost.toFixed(2)} $</span>
+            </div>
+            ${breakdown.lamination_cost > 0 ? `
+            <div class="cost-item">
+                <span>• Coût lamination</span>
+                <span>${breakdown.lamination_cost.toFixed(2)} $</span>
+            </div>
+            ` : ''}
+            <div class="cost-item">
+                <span><strong>Total matériaux</strong></span>
+                <span><strong>${breakdown.material_cost.toFixed(2)} $</strong></span>
+            </div>
+            
+            <div class="cost-item mt-3">
+                <span>Main-d'œuvre (complexité: ${breakdown.complexity_multiplier}x)</span>
+                <span></span>
+            </div>
+            ${breakdown.design_cost > 0 ? `
+            <div class="cost-item">
+                <span>• Conception (${breakdown.design_rate.toFixed(0)}$/h)</span>
+                <span>${breakdown.design_cost.toFixed(2)} $</span>
+            </div>
+            ` : ''}
+            <div class="cost-item">
+                <span>• Installation (${breakdown.installation_rate.toFixed(0)}$/h × ${breakdown.complexity_multiplier})</span>
+                <span>${breakdown.installation_cost.toFixed(2)} $</span>
+            </div>
+            <div class="cost-item">
+                <span><strong>Total main-d'œuvre</strong></span>
+                <span><strong>${breakdown.labor_cost.toFixed(2)} $</strong></span>
+            </div>
+            
+            <div class="cost-item mt-3">
+                <span>Frais généraux</span>
+                <span>${breakdown.overhead_cost.toFixed(2)} $</span>
+            </div>
+
+            <div class="cost-item">
+                <span><strong>Sous-total avec marge</strong></span>
+                <span><strong>${breakdown.subtotal_with_margin.toFixed(2)} $</strong></span>
+            </div>
+
+            <div class="cost-item mt-3">
+                <span>TPS (${breakdown.gst_rate.toFixed(1)}%)</span>
+                <span>${breakdown.gst_amount.toFixed(2)} $</span>
+            </div>
+
+            <div class="cost-item">
+                <span>TVQ (${breakdown.qst_rate.toFixed(3)}%)</span>
+                <span>${breakdown.qst_amount.toFixed(2)} $</span>
+            </div>
+
+            <div class="cost-item total">
+                <span><strong>PRIX FINAL (taxes incluses)</strong></span>
+                <span><strong>${breakdown.final_price_with_taxes.toFixed(2)} $ CAD</strong></span>
+            </div>
+        `;
+        costBreakdown.innerHTML = html;
+    }
+    
+    // Sauvegarde de la soumission
+    saveQuoteBtn.addEventListener('click', function() {
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+        
+        saveQuoteBtn.classList.add('loading');
+        saveQuoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création...';
+        
+        fetch('/api/lettering/save-quote/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert(`Soumission ${result.quote_number} créée avec succès!`);
+                window.location.href = `/quotes/${result.quote_id}/`;
+            } else {
+                alert('Erreur: ' + result.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Erreur lors de la sauvegarde');
+        })
+        .finally(() => {
+            saveQuoteBtn.classList.remove('loading');
+            saveQuoteBtn.innerHTML = '<i class="fas fa-save"></i> Créer la Soumission';
+        });
+    });
+});
+</script>
+{% endblock %}

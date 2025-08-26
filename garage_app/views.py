@@ -1107,6 +1107,264 @@ def get_enhanced_makes():
         logger.error(f"Erreur lors de la récupération des marques: {e}")
         return get_fallback_makes()
 
+
+
+
+
+# ==================== CALCULATEUR DE LETTRAGE ====================
+
+@login_required
+def lettering_calculator(request):
+    """Interface du calculateur de lettrage"""
+    from .models import Client, Material, OverheadConfiguration
+
+    context = {
+        'clients': Client.objects.all().order_by('first_name', 'last_name'),
+        'vinyl_materials': Material.objects.filter(type='vinyle', is_active=True).order_by('name'),
+        'lamination_materials': Material.objects.filter(type='lamination', is_active=True).order_by('name'),
+        'overhead_configs': OverheadConfiguration.objects.filter(is_active=True).order_by('-is_default', 'name'),
+        'default_overhead': OverheadConfiguration.objects.filter(is_default=True, is_active=True).first(),
+    }
+
+    return render(request, 'garage_app/lettering/calculator.html', context)
+
+
+@login_required
+def lettering_calculate_ajax(request):
+    """Calcul AJAX en temps réel pour le lettrage"""
+    if request.method == 'POST':
+        import json
+        from decimal import Decimal
+        from .models import Vehicle, Material, OverheadConfiguration, LaborRate
+
+        try:
+            data = json.loads(request.body)
+
+            # Récupérer les données du formulaire
+            vehicle_id = data.get('vehicle_id')
+            surface_area = Decimal(str(data.get('surface_area', 0)))
+            waste_percentage = Decimal(str(data.get('waste_percentage', 15)))
+            vinyl_material_id = data.get('vinyl_material_id')
+            lamination_material_id = data.get('lamination_material_id')
+            design_hours = Decimal(str(data.get('design_hours', 0)))
+            installation_hours = Decimal(str(data.get('installation_hours', 0)))
+            overhead_config_id = data.get('overhead_config_id')
+            profit_margin = Decimal(str(data.get('profit_margin', 30)))
+
+            # Validation des données requises
+            if not all([vehicle_id, surface_area, vinyl_material_id, installation_hours, overhead_config_id]):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Données manquantes pour le calcul'
+                })
+
+            # Récupérer les objets
+            vehicle = Vehicle.objects.get(id=vehicle_id)
+            vinyl_material = Material.objects.get(id=vinyl_material_id)
+            lamination_material = None
+            if lamination_material_id:
+                lamination_material = Material.objects.get(id=lamination_material_id)
+            overhead_config = OverheadConfiguration.objects.get(id=overhead_config_id)
+
+            # Calculs
+            surface_with_waste = surface_area * (1 + waste_percentage / 100)
+
+            # 1. Coût des matériaux
+            vinyl_cost = surface_with_waste * vinyl_material.cost_per_sqm
+            lamination_cost = Decimal('0')
+            if lamination_material:
+                lamination_cost = surface_with_waste * lamination_material.cost_per_sqm
+            material_cost = vinyl_cost + lamination_cost
+
+            # 2. Coût de la main-d'œuvre
+            design_rate = LaborRate.objects.filter(task_type='conception', is_active=True).first()
+            installation_rate = LaborRate.objects.filter(task_type='installation', is_active=True).first()
+
+            design_cost = Decimal('0')
+            if design_rate and design_hours:
+                design_cost = design_hours * design_rate.hourly_rate
+
+            installation_cost = Decimal('0')
+            if installation_rate and installation_hours:
+                complexity_multiplier = vehicle.vehicle_type.complexity_multiplier if vehicle.vehicle_type else Decimal('1.0')
+                installation_cost = installation_hours * installation_rate.hourly_rate * complexity_multiplier
+
+            labor_cost = design_cost + installation_cost
+
+            # 3. Frais généraux
+            total_hours = design_hours + installation_hours
+            hourly_overhead = total_hours * overhead_config.hourly_overhead_cost
+            fixed_overhead = overhead_config.fixed_overhead_cost
+            base_cost = material_cost + labor_cost
+            percentage_overhead = base_cost * (overhead_config.percentage_overhead / 100)
+            overhead_cost = hourly_overhead + fixed_overhead + percentage_overhead
+
+            # 4. Totaux
+            total_cost = material_cost + labor_cost + overhead_cost
+            subtotal_with_margin = total_cost * (1 + profit_margin / 100)
+
+            # 5. Calcul des taxes (Québec)
+            gst_rate = Decimal('0.05')  # TPS 5%
+            qst_rate = Decimal('0.09975')  # TVQ 9.975%
+
+            gst_amount = subtotal_with_margin * gst_rate
+            qst_amount = subtotal_with_margin * qst_rate
+            final_price_with_taxes = subtotal_with_margin + gst_amount + qst_amount
+
+            # Détail pour l'affichage
+            breakdown = {
+                'surface_with_waste': float(surface_with_waste),
+                'vinyl_cost': float(vinyl_cost),
+                'lamination_cost': float(lamination_cost),
+                'material_cost': float(material_cost),
+                'design_cost': float(design_cost),
+                'installation_cost': float(installation_cost),
+                'labor_cost': float(labor_cost),
+                'hourly_overhead': float(hourly_overhead),
+                'fixed_overhead': float(fixed_overhead),
+                'percentage_overhead': float(percentage_overhead),
+                'overhead_cost': float(overhead_cost),
+                'total_cost': float(total_cost),
+                'subtotal_with_margin': float(subtotal_with_margin),
+                'gst_amount': float(gst_amount),
+                'qst_amount': float(qst_amount),
+                'final_price_with_taxes': float(final_price_with_taxes),
+                'complexity_multiplier': float(vehicle.vehicle_type.complexity_multiplier if vehicle.vehicle_type else 1),
+                'design_rate': float(design_rate.hourly_rate if design_rate else 0),
+                'installation_rate': float(installation_rate.hourly_rate if installation_rate else 0),
+                'gst_rate': float(gst_rate * 100),
+                'qst_rate': float(qst_rate * 100),
+            }
+
+            return JsonResponse({
+                'success': True,
+                'breakdown': breakdown
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Erreur lors du calcul: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
+@login_required
+def lettering_save_quote(request):
+    """Sauvegarder un calcul de lettrage et créer une soumission"""
+    if request.method == 'POST':
+        import json
+        from decimal import Decimal
+        from .models import LetteringQuote, Quote, QuoteItem
+
+        try:
+            data = json.loads(request.body)
+
+            # Créer le calcul de lettrage
+            lettering_quote = LetteringQuote(
+                client_id=data['client_id'],
+                vehicle_id=data['vehicle_id'],
+                surface_area=Decimal(str(data['surface_area'])),
+                waste_percentage=Decimal(str(data.get('waste_percentage', 15))),
+                vinyl_material_id=data['vinyl_material_id'],
+                lamination_material_id=data.get('lamination_material_id'),
+                design_hours=Decimal(str(data.get('design_hours', 0))),
+                installation_hours=Decimal(str(data['installation_hours'])),
+                overhead_config_id=data['overhead_config_id'],
+                profit_margin=Decimal(str(data.get('profit_margin', 30))),
+                notes=data.get('notes', '')
+            )
+            lettering_quote.save()  # Les coûts sont calculés automatiquement
+
+            # Créer une soumission officielle
+            quote = Quote.objects.create(
+                client=lettering_quote.client,
+                vehicle=lettering_quote.vehicle,
+                notes=f"Lettrage - {lettering_quote.notes}".strip()
+            )
+
+            # Créer l'élément de soumission
+            description = f"Lettrage {lettering_quote.vehicle.make} {lettering_quote.vehicle.model}"
+            if lettering_quote.vehicle.year:
+                description += f" {lettering_quote.vehicle.year}"
+            description += f" - Surface: {lettering_quote.surface_area}m²"
+
+            QuoteItem.objects.create(
+                quote=quote,
+                description=description,
+                price=lettering_quote.final_price_with_taxes,
+                lettering_details=json.dumps({
+                    'lettering_quote_id': lettering_quote.id,
+                    'surface_area': float(lettering_quote.surface_area),
+                    'vinyl_material': lettering_quote.vinyl_material.name,
+                    'lamination_material': lettering_quote.lamination_material.name if lettering_quote.lamination_material else None,
+                    'design_hours': float(lettering_quote.design_hours),
+                    'installation_hours': float(lettering_quote.installation_hours),
+                    'profit_margin': float(lettering_quote.profit_margin),
+                    'price_before_taxes': float(lettering_quote.final_price),
+                    'gst_amount': float(lettering_quote.gst_amount),
+                    'qst_amount': float(lettering_quote.qst_amount),
+                    'final_price_with_taxes': float(lettering_quote.final_price_with_taxes),
+                    'breakdown': lettering_quote.get_cost_breakdown()
+                })
+            )
+
+            # Lier la soumission au calcul
+            lettering_quote.is_converted_to_quote = True
+            lettering_quote.related_quote = quote
+            lettering_quote.save()
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Soumission créée avec succès',
+                'quote_id': quote.id,
+                'quote_number': quote.quote_number
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Erreur lors de la sauvegarde: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
+
+
+@login_required
+def client_vehicles_ajax(request, client_id):
+    """Récupérer les véhicules d'un client en AJAX"""
+    try:
+        client = Client.objects.get(id=client_id)
+        vehicles = client.vehicles.all()
+
+        vehicles_data = []
+        for vehicle in vehicles:
+            vehicles_data.append({
+                'id': vehicle.id,
+                'make': vehicle.make,
+                'model': vehicle.model,
+                'year': vehicle.year,
+                'vehicle_type': vehicle.vehicle_type.name if vehicle.vehicle_type else None,
+                'complexity_multiplier': float(vehicle.vehicle_type.complexity_multiplier) if vehicle.vehicle_type else 1.0
+            })
+
+        return JsonResponse({
+            'success': True,
+            'vehicles': vehicles_data
+        })
+
+    except Client.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Client non trouvé'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        })
+
     return JsonResponse({'success': False, 'message': 'Méthode non autorisée'})
 
 

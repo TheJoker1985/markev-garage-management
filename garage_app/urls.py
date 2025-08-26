@@ -16,6 +16,7 @@ urlpatterns = [
     path('clients/new/', views.client_create, name='client_create'),
     path('clients/<int:client_id>/edit/', views.client_update, name='client_update'),
     path('clients/<int:client_id>/delete/', views.client_delete, name='client_delete'),
+    path('clients/<int:client_id>/vehicles/', views.client_vehicles_ajax, name='client_vehicles_ajax'),
 
     # Gestion des véhicules
     path('vehicles/new/', views.vehicle_create, name='vehicle_create'),
@@ -25,6 +26,11 @@ urlpatterns = [
     path('vehicles/identify-type/', views.identify_vehicle_type, name='identify_vehicle_type'),
     path('api/vehicle-makes/', views.get_vehicle_makes, name='get_vehicle_makes'),
     path('api/vehicle-models/', views.get_vehicle_models, name='get_vehicle_models'),
+
+    # Calculateur de lettrage
+    path('lettering/calculator/', views.lettering_calculator, name='lettering_calculator'),
+    path('api/lettering/calculate/', views.lettering_calculate_ajax, name='lettering_calculate_ajax'),
+    path('api/lettering/save-quote/', views.lettering_save_quote, name='lettering_save_quote'),
 
     # Gestion des services
     path('services/', views.service_list, name='service_list'),
