@@ -6,10 +6,11 @@
 {% block extra_css %}
 <style>
     .calculator-card {
-        background: #fff;
+        background: var(--bs-card-bg, #1e1e1e);
         border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         margin-bottom: 20px;
+        border: 1px solid #555;
     }
     
     .calculator-header {
@@ -39,7 +40,7 @@
         right: -50%;
         width: 100%;
         height: 2px;
-        background: #e0e0e0;
+        background: #555;
         z-index: 1;
     }
     
@@ -55,8 +56,8 @@
         width: 30px;
         height: 30px;
         border-radius: 50%;
-        background: #e0e0e0;
-        color: #666;
+        background: #555;
+        color: #e0e0e0;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -78,36 +79,39 @@
     
     .form-section {
         padding: 20px;
-        border-bottom: 1px solid #eee;
+        border-bottom: 1px solid #555;
+        color: #e0e0e0;
     }
-    
+
     .form-section:last-child {
         border-bottom: none;
     }
-    
+
     .cost-breakdown {
-        background: #f8f9fa;
+        background: #2a2a2a;
         border-radius: 8px;
         padding: 20px;
         margin-top: 20px;
+        border: 1px solid #555;
     }
-    
+
     .cost-item {
         display: flex;
         justify-content: space-between;
         padding: 8px 0;
-        border-bottom: 1px solid #dee2e6;
+        border-bottom: 1px solid #555;
+        color: #e0e0e0;
     }
-    
+
     .cost-item:last-child {
         border-bottom: none;
         font-weight: bold;
         font-size: 1.1em;
-        color: #28a745;
+        color: #75b798;
     }
-    
+
     .cost-item.total {
-        border-top: 2px solid #28a745;
+        border-top: 2px solid #75b798;
         margin-top: 10px;
         padding-top: 15px;
     }
