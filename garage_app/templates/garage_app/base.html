@@ -440,6 +440,11 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if 'fiscal_archive' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'garage_app:fiscal_archives_list' %}">
+                        <i class="fas fa-archive me-2"></i>Archives fiscales
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'company_profile' %}active{% endif %}" href="{% url 'garage_app:company_profile' %}">
                         <i class="fas fa-building me-2"></i>Profil entreprise
                     </a>

@@ -184,6 +184,23 @@
         font-size: 1.1em;
         margin-top: 10px;
     }
+
+    /* Styles pour la taille personnalisée */
+    .custom-size-input {
+        margin-left: 20px;
+    }
+
+    .custom-size-input .form-control {
+        background-color: #1e1e1e !important;
+        border-color: #555 !important;
+        color: #e0e0e0 !important;
+    }
+
+    .custom-size-input .input-group-text {
+        background-color: #2a2a2a !important;
+        border-color: #555 !important;
+        color: #e0e0e0 !important;
+    }
     
     .btn-save-quote {
         background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
@@ -409,6 +426,21 @@
                                                 <small>Lettres: 5,00$ • Symboles: 6,25$</small>
                                             </label>
                                         </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="character_size" id="size_custom" value="custom">
+                                            <label class="form-check-label" for="size_custom">
+                                                <strong>Personnalisé (31+ cm)</strong><br>
+                                                <div class="custom-size-input mt-2" style="display: none;">
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number" class="form-control" id="custom_size" name="custom_size"
+                                                               placeholder="Taille" min="31" step="1">
+                                                        <span class="input-group-text">cm</span>
+                                                    </div>
+                                                    <small class="text-muted">Prix calculé proportionnellement</small>
+                                                </div>
+                                                <small id="custom-price-display" style="display: none;"></small>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -552,6 +584,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // Fonction pour calculer le prix personnalisé basé sur la taille
+    function calculateCustomPrice(size) {
+        // Calcul proportionnel basé sur la progression des prix existants
+        // Petit (3.5cm moyen): 2.00$ / 2.50$
+        // Moyen (10.5cm moyen): 3.50$ / 4.40$
+        // Grand (23cm moyen): 5.00$ / 6.25$
+
+        // Progression approximative: +0.15$ par cm pour lettres, +0.19$ par cm pour symboles
+        const baseLetterPrice = 2.00;
+        const baseSymbolPrice = 2.50;
+        const letterPricePerCm = 0.15;
+        const symbolPricePerCm = 0.19;
+
+        const letterPrice = baseLetterPrice + (size * letterPricePerCm);
+        const symbolPrice = baseSymbolPrice + (size * symbolPricePerCm);
+
+        return {
+            letter: Math.round(letterPrice * 100) / 100, // Arrondir à 2 décimales
+            symbol: Math.round(symbolPrice * 100) / 100
+        };
+    }
+
     // Gestion de la sélection du type de travail
     document.querySelectorAll('.work-type-card').forEach(card => {
         card.addEventListener('click', function() {
@@ -568,15 +622,53 @@ document.addEventListener('DOMContentLoaded', function() {
             // Afficher/masquer les sections appropriées
             const wrappingSection = document.getElementById('wrapping-section');
             const letteringSection = document.getElementById('lettering-section');
+            const calculateBtn = document.getElementById('calculateBtn');
 
             if (workType === 'wrapping') {
                 wrappingSection.style.display = 'block';
                 letteringSection.style.display = 'none';
+                calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculer le Prix';
+                calculateBtn.title = 'Calculer le prix détaillé du wrapping';
             } else if (workType === 'lettering') {
                 wrappingSection.style.display = 'none';
                 letteringSection.style.display = 'block';
+                calculateBtn.innerHTML = '<i class="fas fa-file-invoice"></i> Créer Facture/Soumission';
+                calculateBtn.title = 'Créer une facture ou soumission avec le prix calculé';
             }
         });
+    });
+
+    // Gestion de l'affichage du champ taille personnalisée
+    document.querySelectorAll('input[name="character_size"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const customSizeInput = document.querySelector('.custom-size-input');
+            const customPriceDisplay = document.getElementById('custom-price-display');
+
+            if (this.value === 'custom') {
+                customSizeInput.style.display = 'block';
+                customPriceDisplay.style.display = 'block';
+            } else {
+                customSizeInput.style.display = 'none';
+                customPriceDisplay.style.display = 'none';
+            }
+
+            calculateLetteringPrice();
+        });
+    });
+
+    // Gestion du changement de taille personnalisée
+    document.getElementById('custom_size').addEventListener('input', function() {
+        const size = parseFloat(this.value);
+        const customPriceDisplay = document.getElementById('custom-price-display');
+
+        if (size && size >= 31) {
+            const prices = calculateCustomPrice(size);
+            customPriceDisplay.textContent = `Lettres: ${prices.letter.toFixed(2)}$ • Symboles: ${prices.symbol.toFixed(2)}$`;
+        } else {
+            customPriceDisplay.textContent = '';
+        }
+
+        calculateLetteringPrice();
     });
 
     // Fonction pour compter les caractères
@@ -627,7 +719,27 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const counts = countCharacters(text);
-        const prices = letteringPrices[selectedSize];
+        let prices;
+
+        // Déterminer les prix selon la taille
+        if (selectedSize === 'custom') {
+            const customSize = parseFloat(document.getElementById('custom_size').value);
+            if (!customSize || customSize < 31) {
+                // Réinitialiser si taille personnalisée invalide
+                document.getElementById('letter-count').textContent = '0';
+                document.getElementById('symbol-count').textContent = '0';
+                document.getElementById('space-count').textContent = '0';
+                document.getElementById('letter-price').textContent = '0,00$';
+                document.getElementById('symbol-price').textContent = '0,00$';
+                document.getElementById('letter-total').textContent = '0,00$';
+                document.getElementById('symbol-total').textContent = '0,00$';
+                document.getElementById('lettering-total').textContent = '0,00$';
+                return 0;
+            }
+            prices = calculateCustomPrice(customSize);
+        } else {
+            prices = letteringPrices[selectedSize];
+        }
 
         const letterTotal = counts.letters * prices.letter;
         const symbolTotal = counts.symbols * prices.symbol;
@@ -712,47 +824,106 @@ document.addEventListener('DOMContentLoaded', function() {
     calculateBtn.addEventListener('click', function() {
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
-        
-        // Validation
-        if (!data.client_id || !data.vehicle_id || !data.surface_area || !data.vinyl_material_id || !data.installation_hours) {
-            alert('Veuillez remplir tous les champs obligatoires.');
+        const workType = data.work_type;
+
+        // Validation selon le type de travail
+        if (workType === 'wrapping') {
+            // Validation pour wrapping
+            if (!data.client_id || !data.vehicle_id || !data.surface_area || !data.vinyl_material_id || !data.installation_hours) {
+                alert('Veuillez remplir tous les champs obligatoires pour le wrapping.');
+                return;
+            }
+        } else if (workType === 'lettering') {
+            // Validation pour lettrage
+            if (!data.client_id || !data.vehicle_id || !data.lettering_text || !data.character_size || !data.installation_hours) {
+                alert('Veuillez remplir tous les champs obligatoires pour le lettrage.');
+                return;
+            }
+
+            // Validation spéciale pour taille personnalisée
+            if (data.character_size === 'custom' && (!data.custom_size || parseFloat(data.custom_size) < 31)) {
+                alert('Veuillez saisir une taille personnalisée d\'au moins 31 cm.');
+                return;
+            }
+        } else {
+            alert('Veuillez sélectionner un type de travail.');
             return;
         }
         
-        // Afficher le loading
-        calculateBtn.classList.add('loading');
-        calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calcul en cours...';
-        
-        // Envoyer la requête
-        fetch('/api/lettering/calculate/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                displayResults(result.breakdown);
-                saveQuoteBtn.style.display = 'inline-block';
-                resultsSection.style.display = 'block';
-                
-                // Scroll vers les résultats
-                resultsSection.scrollIntoView({ behavior: 'smooth' });
-            } else {
-                alert('Erreur: ' + result.message);
+        if (workType === 'wrapping') {
+            // Traitement pour wrapping (comportement actuel)
+            calculateBtn.classList.add('loading');
+            calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calcul en cours...';
+
+            fetch('/api/lettering/calculate/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    displayResults(result.breakdown);
+                    saveQuoteBtn.style.display = 'inline-block';
+                    resultsSection.style.display = 'block';
+
+                    // Scroll vers les résultats
+                    resultsSection.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('Erreur: ' + result.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                alert('Erreur lors du calcul');
+            })
+            .finally(() => {
+                calculateBtn.classList.remove('loading');
+                calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculer le Prix';
+            });
+
+        } else if (workType === 'lettering') {
+            // Traitement pour lettrage - création directe de facture/soumission
+            const letteringTotal = calculateLetteringPrice();
+
+            if (letteringTotal <= 0) {
+                alert('Le prix du lettrage doit être supérieur à 0.');
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            alert('Erreur lors du calcul');
-        })
-        .finally(() => {
-            calculateBtn.classList.remove('loading');
-            calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculer le Prix';
-        });
+
+            // Ajouter le prix du lettrage aux données
+            data.lettering_total = letteringTotal;
+
+            // Afficher le loading
+            calculateBtn.classList.add('loading');
+            calculateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Préparation...';
+
+            // Rediriger vers la création de facture/soumission avec les données
+            const params = new URLSearchParams({
+                'client_id': data.client_id,
+                'vehicle_id': data.vehicle_id,
+                'work_type': 'lettering',
+                'lettering_text': data.lettering_text,
+                'character_size': data.character_size,
+                'custom_size': data.custom_size || '',
+                'lettering_total': letteringTotal,
+                'design_hours': data.design_hours || 0,
+                'installation_hours': data.installation_hours,
+                'overhead_config_id': data.overhead_config_id,
+                'profit_margin': data.profit_margin || 30,
+                'notes': data.notes || ''
+            });
+
+            // Demander à l'utilisateur s'il veut créer une facture ou une soumission
+            if (confirm('Voulez-vous créer une FACTURE (OK) ou une SOUMISSION (Annuler) ?')) {
+                window.location.href = `/invoices/new/?${params.toString()}`;
+            } else {
+                window.location.href = `/quotes/new/?${params.toString()}`;
+            }
+        }
     });
     
     // Affichage des résultats

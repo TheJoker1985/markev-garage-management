@@ -538,6 +538,46 @@ document.addEventListener('DOMContentLoaded', function() {
     if (formsetContainer) {
         observer.observe(formsetContainer, { childList: true, subtree: true });
     }
+
+    // Gestion des données du lettrage si disponibles
+    {% if lettering_data %}
+    const letteringData = JSON.parse('{{ lettering_data|escapejs }}');
+
+    if (letteringData && letteringData.work_type === 'lettering') {
+        // Ajouter automatiquement un service de lettrage
+        setTimeout(function() {
+            // Trouver le premier formulaire de service vide
+            const serviceRows = document.querySelectorAll('.service-row');
+            if (serviceRows.length > 0) {
+                const firstRow = serviceRows[0];
+
+                // Remplir la description
+                const descriptionField = firstRow.querySelector('input[name$="-description"]');
+                if (descriptionField) {
+                    let description = `Lettrage découpé: "${letteringData.lettering_text}"`;
+                    if (letteringData.character_size === 'custom') {
+                        description += ` (${letteringData.custom_size} cm)`;
+                    } else {
+                        description += ` (${letteringData.character_size})`;
+                    }
+                    descriptionField.value = description;
+                }
+
+                // Remplir le prix
+                const priceField = firstRow.querySelector('input[name$="-unit_price"]');
+                if (priceField && letteringData.lettering_total) {
+                    priceField.value = parseFloat(letteringData.lettering_total).toFixed(2);
+                }
+
+                // Mettre la quantité à 1
+                const quantityField = firstRow.querySelector('input[name$="-quantity"]');
+                if (quantityField) {
+                    quantityField.value = 1;
+                }
+            }
+        }, 500); // Délai pour s'assurer que le DOM est prêt
+    }
+    {% endif %}
 });
 </script>
 {% endblock %}

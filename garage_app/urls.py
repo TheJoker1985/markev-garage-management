@@ -115,4 +115,9 @@ urlpatterns = [
     path('stock-receipts/<int:stock_receipt_id>/edit/', views.stock_receipt_edit, name='stock_receipt_edit'),
     path('stock-receipts/<int:stock_receipt_id>/delete/', views.stock_receipt_delete, name='stock_receipt_delete'),
     path('stock-receipts/<int:stock_receipt_id>/process/', views.stock_receipt_process, name='stock_receipt_process'),
+
+    # URLs pour les archives fiscales
+    path('fiscal-archives/', views.fiscal_archives_list, name='fiscal_archives_list'),
+    path('fiscal-archives/<int:archive_id>/', views.fiscal_archive_detail, name='fiscal_archive_detail'),
+    path('fiscal-archives/<int:archive_id>/export/', views.fiscal_archive_export, name='fiscal_archive_export'),
 ]

@@ -1,0 +1,257 @@
+{% extends 'garage_app/base.html' %}
+
+{% block title %}{{ title }} - MarKev{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- En-tête -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="fas fa-archive me-2"></i>{{ title }}</h1>
+                <p class="text-muted mb-0">
+                    Période: {{ fiscal_start|date:"d/m/Y" }} - {{ fiscal_end|date:"d/m/Y" }}
+                    {% if archive.is_locked %}
+                        <span class="badge bg-warning ms-2">
+                            <i class="fas fa-lock me-1"></i>Verrouillé
+                        </span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="btn-group">
+                <a href="{% url 'garage_app:fiscal_archives_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Retour aux archives
+                </a>
+                <a href="{% url 'garage_app:fiscal_archive_export' archive.id %}" class="btn btn-primary">
+                    <i class="fas fa-download me-2"></i>Exporter PDF
+                </a>
+            </div>
+        </div>
+
+        <!-- Résumé financier -->
+        <div class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Résumé financier</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="financial-item">
+                                    <div class="financial-label">Chiffre d'affaires total</div>
+                                    <div class="financial-value text-success">
+                                        ${{ archive.total_revenue|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <div class="financial-item">
+                                    <div class="financial-label">Total des dépenses</div>
+                                    <div class="financial-value text-danger">
+                                        ${{ archive.total_expenses|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="financial-item">
+                                    <div class="financial-label"><strong>Bénéfice net</strong></div>
+                                    <div class="financial-value {% if archive.calculate_net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        <strong>${{ archive.calculate_net_profit|floatformat:2 }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="financial-item">
+                                    <div class="financial-label">TPS collectée</div>
+                                    <div class="financial-value">
+                                        ${{ archive.total_gst_collected|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <div class="financial-item">
+                                    <div class="financial-label">TVQ collectée</div>
+                                    <div class="financial-value">
+                                        ${{ archive.total_qst_collected|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <div class="financial-item">
+                                    <div class="financial-label">TPS payée</div>
+                                    <div class="financial-value">
+                                        ${{ archive.total_gst_paid|floatformat:2 }}
+                                    </div>
+                                </div>
+                                <div class="financial-item">
+                                    <div class="financial-label">TVQ payée</div>
+                                    <div class="financial-value">
+                                        ${{ archive.total_qst_paid|floatformat:2 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Informations</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="info-item">
+                            <strong>Nombre de factures:</strong><br>
+                            {{ archive.total_invoices }}
+                        </div>
+                        <div class="info-item">
+                            <strong>Date d'archivage:</strong><br>
+                            {{ archive.archive_date|date:"d/m/Y à H:i" }}
+                        </div>
+                        {% if archive.archived_by %}
+                            <div class="info-item">
+                                <strong>Archivé par:</strong><br>
+                                {{ archive.archived_by.get_full_name|default:archive.archived_by.username }}
+                            </div>
+                        {% endif %}
+                        {% if archive.notes %}
+                            <div class="info-item">
+                                <strong>Notes:</strong><br>
+                                {{ archive.notes }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onglets pour les détails -->
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="archiveDetailTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="invoices-tab" data-bs-toggle="tab" 
+                                data-bs-target="#invoices" type="button" role="tab">
+                            <i class="fas fa-file-invoice me-2"></i>
+                            Factures ({{ archived_invoices.count }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="expenses-tab" data-bs-toggle="tab" 
+                                data-bs-target="#expenses" type="button" role="tab">
+                            <i class="fas fa-receipt me-2"></i>
+                            Dépenses ({{ archived_expenses.count }})
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="archiveDetailTabsContent">
+                    <!-- Onglet Factures -->
+                    <div class="tab-pane fade show active" id="invoices" role="tabpanel">
+                        {% if archived_invoices %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Numéro</th>
+                                            <th>Client</th>
+                                            <th>Statut</th>
+                                            <th class="text-end">Montant</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for invoice in archived_invoices %}
+                                            <tr>
+                                                <td>{{ invoice.invoice_date|date:"d/m/Y" }}</td>
+                                                <td>
+                                                    <a href="{% url 'garage_app:invoice_detail' invoice.id %}" 
+                                                       class="text-decoration-none">
+                                                        {{ invoice.invoice_number }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ invoice.client.full_name }}</td>
+                                                <td>
+                                                    <span class="badge bg-{{ invoice.get_status_color }}">
+                                                        {{ invoice.get_status_display }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-end">${{ invoice.total_amount|floatformat:2 }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-file-invoice fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Aucune facture archivée pour cette période.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Onglet Dépenses -->
+                    <div class="tab-pane fade" id="expenses" role="tabpanel">
+                        {% if archived_expenses %}
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Description</th>
+                                            <th>Catégorie</th>
+                                            <th>Fournisseur</th>
+                                            <th class="text-end">Montant</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for expense in archived_expenses %}
+                                            <tr>
+                                                <td>{{ expense.expense_date|date:"d/m/Y" }}</td>
+                                                <td>
+                                                    <a href="{% url 'garage_app:expense_detail' expense.id %}" 
+                                                       class="text-decoration-none">
+                                                        {{ expense.description|truncatechars:50 }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ expense.get_category_display }}</td>
+                                                <td>{{ expense.supplier|default:"-" }}</td>
+                                                <td class="text-end">${{ expense.amount|floatformat:2 }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">Aucune dépense archivée pour cette période.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.financial-item {
+    margin-bottom: 15px;
+}
+
+.financial-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.financial-value {
+    font-size: 1.3rem;
+    font-weight: bold;
+}
+
+.info-item {
+    margin-bottom: 15px;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+</style>
+{% endblock %}

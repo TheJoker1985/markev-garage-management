@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from .models import (
     Invoice, Expense, Payment, Client, Service, CompanyProfile, Vehicle, InvoiceItem,
     Supplier, RecurringExpense, Appointment, InventoryItem, StockAlert, StockReceipt, StockReceiptItem,
-    Quote, QuoteItem
+    Quote, QuoteItem, FiscalYearArchive
 )
 from .forms import (
     CompanyProfileForm, ClientForm, VehicleForm, ServiceForm, InvoiceForm,
@@ -77,8 +77,11 @@ def dashboard(request):
     monthly_profit = monthly_revenue - monthly_expenses
     yearly_profit = yearly_revenue - yearly_expenses
 
-    # Factures en attente
-    pending_invoices = Invoice.objects.filter(status__in=['sent', 'draft']).count()
+    # Factures en attente (exclure les données archivées)
+    pending_invoices = Invoice.objects.filter(
+        status__in=['sent', 'draft'],
+        archived_fiscal_year__isnull=True
+    ).count()
     # Note: Plus de date d'échéance, donc pas de factures en retard
     overdue_invoices = 0
 
@@ -435,7 +438,8 @@ def invoice_list(request):
     search_query = request.GET.get('search', '')
     status_filter = request.GET.get('status', '')
 
-    invoices = Invoice.objects.all()
+    # Exclure les factures archivées
+    invoices = Invoice.objects.filter(archived_fiscal_year__isnull=True)
 
     if search_query:
         invoices = invoices.filter(
@@ -550,11 +554,40 @@ def invoice_create(request):
         form = InvoiceForm()
         formset = InvoiceItemFormSet()
 
+        # Pré-remplir avec les données du calculateur de lettrage si disponibles
+        if request.GET.get('work_type') == 'lettering':
+            client_id = request.GET.get('client_id')
+            vehicle_id = request.GET.get('vehicle_id')
+
+            if client_id:
+                form.fields['client'].initial = client_id
+            if vehicle_id:
+                form.fields['vehicle'].initial = vehicle_id
+
+            # Ajouter les données du lettrage dans le contexte pour JavaScript
+            import json
+            lettering_data_dict = {
+                'work_type': request.GET.get('work_type'),
+                'lettering_text': request.GET.get('lettering_text'),
+                'character_size': request.GET.get('character_size'),
+                'custom_size': request.GET.get('custom_size'),
+                'lettering_total': request.GET.get('lettering_total'),
+                'design_hours': request.GET.get('design_hours'),
+                'installation_hours': request.GET.get('installation_hours'),
+                'overhead_config_id': request.GET.get('overhead_config_id'),
+                'profit_margin': request.GET.get('profit_margin'),
+                'notes': request.GET.get('notes')
+            }
+            lettering_data = json.dumps(lettering_data_dict)
+        else:
+            lettering_data = None
+
     context = {
         'form': form,
         'formset': formset,
         'title': 'Nouvelle facture',
-        'submit_text': 'Créer la facture'
+        'submit_text': 'Créer la facture',
+        'lettering_data': lettering_data
     }
 
     return render(request, 'garage_app/invoices/invoice_form.html', context)
@@ -1459,7 +1492,8 @@ def expense_list(request):
     search_query = request.GET.get('search', '')
     category_filter = request.GET.get('category', '')
 
-    expenses = Expense.objects.all()
+    # Exclure les dépenses archivées
+    expenses = Expense.objects.filter(archived_fiscal_year__isnull=True)
 
     if search_query:
         expenses = expenses.filter(
@@ -2807,10 +2841,39 @@ def quote_create(request):
         form = QuoteForm()
         formset = QuoteItemFormSet()
 
+        # Pré-remplir avec les données du calculateur de lettrage si disponibles
+        if request.GET.get('work_type') == 'lettering':
+            client_id = request.GET.get('client_id')
+            vehicle_id = request.GET.get('vehicle_id')
+
+            if client_id:
+                form.fields['client'].initial = client_id
+            if vehicle_id:
+                form.fields['vehicle'].initial = vehicle_id
+
+            # Ajouter les données du lettrage dans le contexte pour JavaScript
+            import json
+            lettering_data_dict = {
+                'work_type': request.GET.get('work_type'),
+                'lettering_text': request.GET.get('lettering_text'),
+                'character_size': request.GET.get('character_size'),
+                'custom_size': request.GET.get('custom_size'),
+                'lettering_total': request.GET.get('lettering_total'),
+                'design_hours': request.GET.get('design_hours'),
+                'installation_hours': request.GET.get('installation_hours'),
+                'overhead_config_id': request.GET.get('overhead_config_id'),
+                'profit_margin': request.GET.get('profit_margin'),
+                'notes': request.GET.get('notes')
+            }
+            lettering_data = json.dumps(lettering_data_dict)
+        else:
+            lettering_data = None
+
     context = {
         'form': form,
         'formset': formset,
         'title': 'Nouvelle soumission',
+        'lettering_data': lettering_data
     }
 
     return render(request, 'garage_app/quotes/quote_form.html', context)
@@ -2886,3 +2949,191 @@ def quote_convert_to_invoice(request, quote_id):
             return redirect('garage_app:quote_detail', quote_id=quote.id)
 
     return render(request, 'garage_app/quotes/quote_convert.html', {'quote': quote})
+
+
+# ============================================================================
+# VUES POUR LES ARCHIVES FISCALES
+# ============================================================================
+
+@login_required
+def fiscal_archives_list(request):
+    """Vue pour lister toutes les archives fiscales"""
+    archives = FiscalYearArchive.objects.all().order_by('-fiscal_year')
+
+    context = {
+        'archives': archives,
+        'title': 'Archives fiscales'
+    }
+
+    return render(request, 'garage_app/fiscal_archives/archive_list.html', context)
+
+
+@login_required
+def fiscal_archive_detail(request, archive_id):
+    """Vue pour afficher les détails d'une archive fiscale"""
+    archive = get_object_or_404(FiscalYearArchive, id=archive_id)
+
+    # Récupérer le profil d'entreprise pour les calculs de période
+    company_profile = CompanyProfile.objects.first()
+    if not company_profile:
+        messages.error(request, "Aucun profil d'entreprise configuré.")
+        return redirect('garage_app:fiscal_archives_list')
+
+    # Calculer la période fiscale
+    fiscal_start, fiscal_end = company_profile.get_fiscal_year_period(archive.fiscal_year)
+
+    # Récupérer les factures et dépenses archivées
+    archived_invoices = Invoice.objects.filter(
+        archived_fiscal_year=archive.fiscal_year
+    ).order_by('-invoice_date')
+
+    archived_expenses = Expense.objects.filter(
+        archived_fiscal_year=archive.fiscal_year
+    ).order_by('-expense_date')
+
+    context = {
+        'archive': archive,
+        'fiscal_start': fiscal_start,
+        'fiscal_end': fiscal_end,
+        'archived_invoices': archived_invoices,
+        'archived_expenses': archived_expenses,
+        'title': f'Archive année fiscale {archive.fiscal_year}'
+    }
+
+    return render(request, 'garage_app/fiscal_archives/archive_detail.html', context)
+
+
+@login_required
+def fiscal_archive_export(request, archive_id):
+    """Vue pour exporter les données d'une archive fiscale en PDF"""
+    archive = get_object_or_404(FiscalYearArchive, id=archive_id)
+
+    # Récupérer le profil d'entreprise
+    company_profile = CompanyProfile.objects.first()
+    if not company_profile:
+        messages.error(request, "Aucun profil d'entreprise configuré.")
+        return redirect('garage_app:fiscal_archive_detail', archive_id=archive_id)
+
+    # Calculer la période fiscale
+    fiscal_start, fiscal_end = company_profile.get_fiscal_year_period(archive.fiscal_year)
+
+    # Récupérer les données archivées
+    archived_invoices = Invoice.objects.filter(
+        archived_fiscal_year=archive.fiscal_year
+    ).order_by('invoice_date')
+
+    archived_expenses = Expense.objects.filter(
+        archived_fiscal_year=archive.fiscal_year
+    ).order_by('expense_date')
+
+    # Créer le PDF
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="archive_fiscale_{archive.fiscal_year}.pdf"'
+
+    # Créer le document PDF
+    doc = SimpleDocTemplate(response, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Titre
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    story.append(Paragraph(f"Archive Fiscale {archive.fiscal_year}", title_style))
+    story.append(Paragraph(f"Période: {fiscal_start.strftime('%d/%m/%Y')} - {fiscal_end.strftime('%d/%m/%Y')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+
+    # Résumé financier
+    story.append(Paragraph("RÉSUMÉ FINANCIER", styles['Heading2']))
+
+    summary_data = [
+        ['Indicateur', 'Montant'],
+        ['Chiffre d\'affaires total', f"{archive.total_revenue:,.2f} $"],
+        ['Total des dépenses', f"{archive.total_expenses:,.2f} $"],
+        ['Bénéfice net', f"{archive.calculate_net_profit():,.2f} $"],
+        ['TPS collectée', f"{archive.total_gst_collected:,.2f} $"],
+        ['TVQ collectée', f"{archive.total_qst_collected:,.2f} $"],
+        ['TPS payée', f"{archive.total_gst_paid:,.2f} $"],
+        ['TVQ payée', f"{archive.total_qst_paid:,.2f} $"],
+    ]
+
+    summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+
+    story.append(summary_table)
+    story.append(Spacer(1, 30))
+
+    # Liste des factures
+    if archived_invoices.exists():
+        story.append(Paragraph("FACTURES ARCHIVÉES", styles['Heading2']))
+
+        invoice_data = [['Date', 'Numéro', 'Client', 'Montant']]
+        for invoice in archived_invoices:
+            invoice_data.append([
+                invoice.invoice_date.strftime('%d/%m/%Y'),
+                invoice.invoice_number,
+                str(invoice.client),
+                f"{invoice.total_amount:,.2f} $"
+            ])
+
+        invoice_table = Table(invoice_data, colWidths=[1*inch, 1.5*inch, 2.5*inch, 1*inch])
+        invoice_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ]))
+
+        story.append(invoice_table)
+        story.append(Spacer(1, 20))
+
+    # Liste des dépenses
+    if archived_expenses.exists():
+        story.append(Paragraph("DÉPENSES ARCHIVÉES", styles['Heading2']))
+
+        expense_data = [['Date', 'Description', 'Catégorie', 'Montant']]
+        for expense in archived_expenses:
+            expense_data.append([
+                expense.expense_date.strftime('%d/%m/%Y'),
+                expense.description[:30] + ('...' if len(expense.description) > 30 else ''),
+                expense.category,
+                f"{expense.amount:,.2f} $"
+            ])
+
+        expense_table = Table(expense_data, colWidths=[1*inch, 2.5*inch, 1.5*inch, 1*inch])
+        expense_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ]))
+
+        story.append(expense_table)
+
+    # Construire le PDF
+    doc.build(story)
+
+    return response
